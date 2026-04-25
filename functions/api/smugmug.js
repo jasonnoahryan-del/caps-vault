@@ -5,8 +5,8 @@ async function hmacSha1(key, data) {
     { name: 'HMAC', hash: 'SHA-1' },
     false, ['sign']
   );
-  const signature = await crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(data));
-  return btoa(String.fromCharCode(...new Uint8Array(signature)));
+  const sig = await crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(data));
+  return btoa(String.fromCharCode(...new Uint8Array(sig)));
 }
 
 function randomHex(bytes) {
@@ -72,6 +72,28 @@ export async function onRequest(context) {
 
   try {
     const url = new URL(request.url);
+    const action = url.searchParams.get('action');
+
+    // Save album URL to KV
+    if (action === 'save' && request.method === 'POST') {
+      const body = await request.json();
+      const { key, albumUrl } = body;
+      if (!key || !albumUrl) return new Response(JSON.stringify({ error: 'Missing key or albumUrl' }), { status: 400, headers: corsHeaders });
+      await env.CAPS_VAULT_KV.put(key, albumUrl);
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Get all saved album URLs from KV
+    if (action === 'list') {
+      const list = await env.CAPS_VAULT_KV.list();
+      const data = {};
+      for (const key of list.keys) {
+        data[key.name] = await env.CAPS_VAULT_KV.get(key.name);
+      }
+      return new Response(JSON.stringify(data), { headers: corsHeaders });
+    }
+
+    // Load photos from SmugMug
     const albumPath = url.searchParams.get('path');
     if (!albumPath) return new Response(JSON.stringify({ error: 'Missing path' }), { status: 400, headers: corsHeaders });
     if (!env.SMUGMUG_API_KEY) return new Response(JSON.stringify({ error: 'Missing env vars' }), { status: 500, headers: corsHeaders });
@@ -89,11 +111,11 @@ export async function onRequest(context) {
       albumWebUri = lookup.data.Response.Node.WebUri;
     }
 
-    if (!albumKey) return new Response(JSON.stringify({ error: 'Album not found', details: lookup.data }), { status: 404, headers: corsHeaders });
+    if (!albumKey) return new Response(JSON.stringify({ error: 'Album not found' }), { status: 404, headers: corsHeaders });
 
     const imgResult = await smugmugGet(`/api/v2/album/${albumKey}!images`, {
       count: '500', _accept: 'application/json',
-      _filter: 'Uri,FileName,Title,Caption,IsVideo,ThumbnailUrl,WebUri,Uris'
+      _filter: 'Uri,FileName,Title,Caption,IsVideo,ThumbnailUrl,WebUri'
     }, env);
 
     if (!imgResult.data?.Response?.AlbumImage) return new Response(JSON.stringify({ images: [], count: 0 }), { headers: corsHeaders });
