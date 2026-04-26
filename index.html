@@ -1654,7 +1654,7 @@
     <!-- CATEGORY PAGE (list of sub-galleries) -->
     <div id="page-gallery" class="page">
         <div class="gallery-nav">
-            <button class="back-btn" onclick="showPage('browse', document.querySelectorAll('.nav-link')[1])">← Back to Browse</button>
+            <button class="back-btn" onclick="history.back()">← Back to Browse</button>
             <div class="gallery-breadcrumb">
                 Browse / 
                 <span id="gallery-breadcrumb-name"></span>
@@ -2261,12 +2261,31 @@
             leftBg.style.backgroundImage = 'url(data:image/png;base64,' + CUBS_B64 + ')';
     }
 
-    function showPage(name, btn) {
+    function showPage(name, btn, fromHistory) {
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         document.getElementById('page-' + name).classList.add('active');
+        // Sync nav-link highlighting based on the page name (works whether btn is passed or not)
+        document.querySelectorAll('.nav-link').forEach(b => b.classList.remove('active'));
         if (btn) {
-            document.querySelectorAll('.nav-link').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
+        } else {
+            // Find the matching nav link for the page name and activate it
+            const navLinks = document.querySelectorAll('.nav-link');
+            const pageToIndex = {
+                home: 0,
+                browse: 1,
+                about: 2,
+                contact: 3
+            };
+            const idx = pageToIndex[name];
+            if (idx !== undefined && navLinks[idx])
+                navLinks[idx].classList.add('active');
+        }
+        if (!fromHistory) {
+            history.pushState({
+                view: 'page',
+                name: name
+            }, '', '#' + name);
         }
     }
 
@@ -2290,7 +2309,7 @@
     }
 
     // ── OPEN CATEGORY → show sub-gallery list ──
-    function openPortfolio(id) {
+    function openPortfolio(id, fromHistory) {
         const p = portfolios.find(x => x.id === id);
         const name = p ? p.name : id;
         currentPortfolio = id;
@@ -2301,6 +2320,12 @@
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         document.getElementById('page-gallery').classList.add('active');
         document.querySelectorAll('.nav-link').forEach(b => b.classList.remove('active'));
+        if (!fromHistory) {
+            history.pushState({
+                view: 'portfolio',
+                id: id
+            }, '', '#browse/' + id);
+        }
     }
 
     function renderSubGalleryGrid() {
@@ -2430,7 +2455,7 @@
         'Conor Sheary': 'Conor Sheary joined the Washington Capitals in 2021 and provided reliable depth scoring and energy as a versatile forward. A two-time Stanley Cup Champion with Pittsburgh, Sheary brought valuable playoff experience and a determined work ethic to Washington\'s lineup, contributing as a complementary winger during his time with the Capitals.'
     };
 
-    function openSubGallery(i) {
+    function openSubGallery(i, fromHistory) {
         currentSubGalleryIndex = i;
         const sg = collectionData[currentPortfolio][i];
         document.getElementById('subgallery-title').textContent = sg.name;
@@ -2476,11 +2501,17 @@
         renderMediaGrid();
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         document.getElementById('page-subgallery').classList.add('active');
+        if (!fromHistory) {
+            history.pushState({
+                view: 'subgallery',
+                portfolio: currentPortfolio,
+                index: i
+            }, '', '#browse/' + currentPortfolio + '/' + i);
+        }
     }
 
     function goBackToCategory() {
-        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-        document.getElementById('page-gallery').classList.add('active');
+        history.back();
     }
 
     let dragSrcIndex = null;
@@ -2993,6 +3024,73 @@
     loadFromKV();
     renderPortfolioGrid();
     renderHomeGrid();
+
+    // ── BROWSER HISTORY / BACK BUTTON SUPPORT ──
+    // Set initial state so the first back press brings us to home (or wherever they started)
+    history.replaceState({
+        view: 'page',
+        name: 'home'
+    }, '', window.location.pathname);
+
+    // Handle browser back/forward navigation
+    window.addEventListener('popstate', (event) => {
+        const state = event.state;
+        if (!state) {
+            // No state — show home
+            showPage('home', null, true);
+            return;
+        }
+        if (state.view === 'page') {
+            showPage(state.name, null, true);
+        } else if (state.view === 'portfolio') {
+            openPortfolio(state.id, true);
+        } else if (state.view === 'subgallery') {
+            // Make sure portfolio context is set first
+            if (currentPortfolio !== state.portfolio) {
+                const p = portfolios.find(x => x.id === state.portfolio);
+                currentPortfolio = state.portfolio;
+                currentPortfolioName = p ? p.name : state.portfolio;
+                document.getElementById('gallery-title').textContent = currentPortfolioName;
+                document.getElementById('gallery-breadcrumb-name').textContent = currentPortfolioName;
+                renderSubGalleryGrid();
+            }
+            openSubGallery(state.index, true);
+        }
+    });
+
+    // On initial page load, check if there's a hash and navigate to it
+    (function handleInitialHash() {
+        const hash = window.location.hash.slice(1);
+        if (!hash)
+            return;
+        const parts = hash.split('/');
+        if (parts[0] === 'browse' && parts[1]) {
+            if (collectionData[parts[1]]) {
+                openPortfolio(parts[1], true);
+                history.replaceState({
+                    view: 'portfolio',
+                    id: parts[1]
+                }, '', '#browse/' + parts[1]);
+                if (parts[2] !== undefined) {
+                    const idx = parseInt(parts[2], 10);
+                    if (!isNaN(idx) && collectionData[parts[1]][idx]) {
+                        openSubGallery(idx, true);
+                        history.replaceState({
+                            view: 'subgallery',
+                            portfolio: parts[1],
+                            index: idx
+                        }, '', '#browse/' + parts[1] + '/' + idx);
+                    }
+                }
+            }
+        } else if (['home', 'browse', 'about', 'contact'].includes(hash)) {
+            showPage(hash, null, true);
+            history.replaceState({
+                view: 'page',
+                name: hash
+            }, '', '#' + hash);
+        }
+    })();
 
 
     document.getElementById('nav-logo-img').addEventListener('click', () => {
