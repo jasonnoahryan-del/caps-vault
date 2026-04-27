@@ -2548,6 +2548,17 @@
         // Use largeUrl for cover so it's not pixelated
         sg.cover = sg.items[i].largeUrl || sg.items[i].thumbUrl || sg.items[i].src;
         saveCollection();
+        // Bug fix: sync the chosen cover to KV so every visitor sees it,
+        // not just this admin's browser. Only worth doing for http URLs
+        // (uploaded base64 covers can't be served to other visitors anyway).
+        if (sg.cover && sg.cover.startsWith('http')) {
+            const kvKey = `${currentPortfolio}__${sg.name}`;
+            fetch('/api/smugmug?action=save-cover', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: kvKey, coverUrl: sg.cover })
+            }).catch(e => console.warn('Cover KV sync failed:', e));
+        }
         renderSubGalleryGrid();
         renderPortfolioGrid();
         // Flash confirmation
@@ -3058,9 +3069,37 @@
         }
     }
 
+    // Load admin-chosen covers from KV so every visitor (not just the
+    // browser that set them) sees the chosen thumbnails. Server is the
+    // source of truth — KV covers override any local default.
+    async function loadCoversFromKV() {
+        try {
+            const resp = await fetch('/api/smugmug?action=list-covers');
+            if (!resp.ok) return;
+            const covers = await resp.json();
+            for (const [key, coverUrl] of Object.entries(covers)) {
+                if (!coverUrl) continue;
+                const parts = key.split('__');
+                if (parts.length !== 2) continue;
+                const [catId, playerName] = parts;
+                if (!collectionData[catId]) continue;
+                const sg = collectionData[catId].find(g => g.name === playerName);
+                if (sg) sg.cover = coverUrl;
+            }
+            renderPortfolioGrid();
+            renderHomeGrid();
+            if (typeof renderSubGalleryGrid === 'function' && currentPortfolio) {
+                renderSubGalleryGrid();
+            }
+        } catch (e) {
+            console.warn('Cover KV load failed:', e);
+        }
+    }
+
     initLogos();
     loadCollection();
     loadFromKV();
+    loadCoversFromKV();
     renderPortfolioGrid();
     renderHomeGrid();
 

@@ -83,11 +83,37 @@ export async function onRequest(context) {
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
-    // Get all saved album URLs from KV
+    // Save chosen cover URL for a gallery to KV (so all visitors see it).
+    // Pass coverUrl: null to clear the saved cover.
+    if (action === 'save-cover' && request.method === 'POST') {
+      const body = await request.json();
+      const { key, coverUrl } = body;
+      if (!key) return new Response(JSON.stringify({ error: 'Missing key' }), { status: 400, headers: corsHeaders });
+      if (coverUrl) {
+        await env.CAPS_VAULT_KV.put('cover:' + key, coverUrl);
+      } else {
+        await env.CAPS_VAULT_KV.delete('cover:' + key);
+      }
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Get all saved cover URLs from KV (returns { "<catId>__<playerName>": coverUrl, ... })
+    if (action === 'list-covers') {
+      const list = await env.CAPS_VAULT_KV.list({ prefix: 'cover:' });
+      const data = {};
+      for (const k of list.keys) {
+        const realKey = k.name.slice('cover:'.length);
+        data[realKey] = await env.CAPS_VAULT_KV.get(k.name);
+      }
+      return new Response(JSON.stringify(data), { headers: corsHeaders });
+    }
+
+    // Get all saved album URLs from KV (excludes cover entries)
     if (action === 'list') {
       const list = await env.CAPS_VAULT_KV.list();
       const data = {};
       for (const key of list.keys) {
+        if (key.name.startsWith('cover:')) continue;
         data[key.name] = await env.CAPS_VAULT_KV.get(key.name);
       }
       return new Response(JSON.stringify(data), { headers: corsHeaders });
