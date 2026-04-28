@@ -99,7 +99,8 @@
         width: 477px;
         height: 477px;
         object-fit: contain;
-        border-radius: 50%;
+        /* No border-radius: the circular clip was cropping the corners of
+           letters (G, N) that extend to the edge of the logo artwork. */
         filter: drop-shadow(0 0 12px rgba(200, 16, 46, 0.5))
     }
 
