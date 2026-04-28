@@ -1627,6 +1627,10 @@
 </head>
 <body>
 
+    <!-- John Walton's Stanley Cup call. Played once on the first user
+         interaction (browsers block sound autoplay). -->
+    <audio id="intro-audio" src="/audio/intro.mp3" preload="auto" style="display:none"></audio>
+
     <nav>
         <a class="nav-logo" onclick="showPage('home')">
             <img id="nav-logo-img" src="" alt="Caps Game-Worn Jerseys Logo">
@@ -3336,6 +3340,25 @@
     loadTextsFromKV();
     renderPortfolioGrid();
     renderHomeGrid();
+
+    // Play the intro audio (John Walton Cup call) on the first user
+    // interaction. Browsers block <audio> autoplay with sound, so we
+    // wait for any click/tap/keypress, then fire it once and detach.
+    (function setupIntroAudio() {
+        let played = false;
+        function playOnce() {
+            if (played) return;
+            played = true;
+            const audio = document.getElementById('intro-audio');
+            if (audio) audio.play().catch(e => console.warn('Intro audio blocked:', e));
+            document.removeEventListener('click', playOnce, true);
+            document.removeEventListener('touchstart', playOnce, true);
+            document.removeEventListener('keydown', playOnce, true);
+        }
+        document.addEventListener('click', playOnce, true);
+        document.addEventListener('touchstart', playOnce, true);
+        document.addEventListener('keydown', playOnce, true);
+    })();
 
     // ── BROWSER HISTORY / BACK BUTTON SUPPORT ──
     // Set initial state so the first back press brings us to home (or wherever they started)
