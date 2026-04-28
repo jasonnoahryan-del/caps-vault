@@ -2791,6 +2791,39 @@
         }, 50);
     }
 
+    // Toggle whether the currently lightboxed photo appears in the home page
+    // "Featured Pieces" grid. Updates local state, persists to localStorage,
+    // and pushes the new array to KV so every visitor and device sees the
+    // same featured items.
+    function toggleFeatured() {
+        const item = currentLightboxItem;
+        if (!item || !item.src) return;
+        const idx = homePhotos.findIndex(p => p && p.src === item.src);
+        if (idx >= 0) {
+            homePhotos.splice(idx, 1);
+        } else {
+            homePhotos.push({ src: item.src, caption: item.name || '' });
+        }
+        saveCollection();
+        // Sync only http-based entries to KV — base64 uploads can't be
+        // served back to other visitors anyway.
+        const syncable = homePhotos.filter(p => p && p.src && p.src.startsWith('http'));
+        fetch('/api/smugmug?action=save-featured', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ featured: syncable })
+        }).catch(e => console.warn('Featured KV sync failed:', e));
+        // Update the Feature button UI in place.
+        const featBtn = document.getElementById('feature-btn');
+        if (featBtn) {
+            const nowFeatured = homePhotos.some(p => p && p.src === item.src);
+            featBtn.textContent = nowFeatured ? '★ Featured' : '★ Feature';
+            featBtn.style.background = nowFeatured ? '#b8960c' : 'transparent';
+            featBtn.style.color = nowFeatured ? '#fff' : '#b8960c';
+        }
+        renderHomeGrid();
+    }
+
     function renderLightboxThumbs() {
         const sg = collectionData[currentPortfolio][currentSubGalleryIndex];
         const thumbsEl = document.getElementById('lightbox-thumbs');
@@ -3070,6 +3103,23 @@
         }
     }
 
+    // Load admin-chosen Featured Pieces from KV so every visitor sees the
+    // same lineup, not just the browser that toggled them.
+    async function loadFeaturedFromKV() {
+        try {
+            const resp = await fetch('/api/smugmug?action=list-featured');
+            if (!resp.ok) return;
+            const data = await resp.json();
+            if (Array.isArray(data.featured)) {
+                // Server is the source of truth.
+                homePhotos = data.featured;
+                renderHomeGrid();
+            }
+        } catch (e) {
+            console.warn('Featured KV load failed:', e);
+        }
+    }
+
     // Load admin-chosen covers from KV so every visitor (not just the
     // browser that set them) sees the chosen thumbnails. Server is the
     // source of truth — KV covers override any local default.
@@ -3101,6 +3151,7 @@
     loadCollection();
     loadFromKV();
     loadCoversFromKV();
+    loadFeaturedFromKV();
     renderPortfolioGrid();
     renderHomeGrid();
 

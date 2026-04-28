@@ -108,12 +108,29 @@ export async function onRequest(context) {
       return new Response(JSON.stringify(data), { headers: corsHeaders });
     }
 
-    // Get all saved album URLs from KV (excludes cover entries)
+    // Save the home page Featured Pieces array to KV (whole array at once,
+    // so toggling adds/removes are simple and atomic).
+    if (action === 'save-featured' && request.method === 'POST') {
+      const body = await request.json();
+      const featured = Array.isArray(body.featured) ? body.featured : [];
+      await env.CAPS_VAULT_KV.put('featured', JSON.stringify(featured));
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Get the saved Featured Pieces array
+    if (action === 'list-featured') {
+      const stored = await env.CAPS_VAULT_KV.get('featured');
+      const featured = stored ? JSON.parse(stored) : [];
+      return new Response(JSON.stringify({ featured }), { headers: corsHeaders });
+    }
+
+    // Get all saved album URLs from KV (excludes cover and featured entries)
     if (action === 'list') {
       const list = await env.CAPS_VAULT_KV.list();
       const data = {};
       for (const key of list.keys) {
         if (key.name.startsWith('cover:')) continue;
+        if (key.name === 'featured') continue;
         data[key.name] = await env.CAPS_VAULT_KV.get(key.name);
       }
       return new Response(JSON.stringify(data), { headers: corsHeaders });
