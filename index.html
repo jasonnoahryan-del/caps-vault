@@ -3350,7 +3350,24 @@
             if (played) return;
             played = true;
             const audio = document.getElementById('intro-audio');
-            if (audio) audio.play().catch(e => console.warn('Intro audio blocked:', e));
+            if (audio) {
+                try {
+                    audio.currentTime = 0;
+                    audio.volume = 1;
+                } catch (e) {}
+                const p = audio.play();
+                if (p && p.catch) p.catch(e => console.warn('Intro audio blocked:', e));
+                // Diagnostic: log whenever the audio stops, in case something
+                // is interrupting it. Visible in DevTools console.
+                audio.addEventListener('pause', () => {
+                    if (audio.currentTime < audio.duration - 0.1) {
+                        console.warn('Intro audio paused early at', audio.currentTime, 'of', audio.duration);
+                    }
+                });
+                audio.addEventListener('ended', () => {
+                    console.log('Intro audio finished cleanly');
+                });
+            }
             document.removeEventListener('click', playOnce, true);
             document.removeEventListener('touchstart', playOnce, true);
             document.removeEventListener('keydown', playOnce, true);
