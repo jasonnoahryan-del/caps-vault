@@ -1123,6 +1123,114 @@
         display: none
     }
 
+    /* ── INTRO SPLASH ── */
+    .intro-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        background: var(--caps-dark);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: opacity 0.7s ease;
+    }
+    .intro-splash.dismissed {
+        opacity: 0;
+        pointer-events: none;
+    }
+    .splash-bg {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        pointer-events: none;
+    }
+    .splash-bg-left, .splash-bg-right {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 55%;
+        background-size: cover;
+        background-position: center;
+        opacity: 0.4;
+    }
+    .splash-bg-left {
+        left: 0;
+        mask-image: linear-gradient(to right, rgba(0,0,0,1) 0%, transparent 95%);
+        -webkit-mask-image: linear-gradient(to right, rgba(0,0,0,1) 0%, transparent 95%);
+    }
+    .splash-bg-right {
+        right: 0;
+        mask-image: linear-gradient(to left, rgba(0,0,0,1) 0%, transparent 95%);
+        -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,1) 0%, transparent 95%);
+    }
+    .splash-content {
+        position: relative;
+        z-index: 2;
+        text-align: center;
+        padding: 40px;
+        max-width: 640px;
+    }
+    .splash-logo {
+        width: 240px;
+        height: auto;
+        filter: drop-shadow(0 0 30px rgba(200, 16, 46, 0.7));
+        margin-bottom: 28px;
+    }
+    .splash-title {
+        font-family: 'Oswald', sans-serif;
+        font-size: 56px;
+        font-weight: 700;
+        letter-spacing: 8px;
+        color: var(--caps-white);
+        margin: 0 0 10px;
+        text-transform: uppercase;
+        text-shadow: 0 2px 24px rgba(0, 0, 0, 0.85);
+    }
+    .splash-subtitle {
+        font-family: 'Oswald', sans-serif;
+        font-size: 14px;
+        letter-spacing: 4px;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.65);
+        margin-bottom: 40px;
+    }
+    .splash-enter {
+        font-family: 'Oswald', sans-serif;
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: 5px;
+        text-transform: uppercase;
+        background: var(--caps-red);
+        color: #fff;
+        border: none;
+        padding: 20px 60px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        clip-path: polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
+    }
+    .splash-enter:hover {
+        background: #a00e25;
+        transform: scale(1.03);
+    }
+    .splash-enter:active {
+        transform: scale(0.98);
+    }
+    .splash-hint {
+        margin-top: 20px;
+        font-family: 'Oswald', sans-serif;
+        font-size: 11px;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.4);
+    }
+    @media (max-width: 600px) {
+        .splash-logo { width: 180px; margin-bottom: 20px; }
+        .splash-title { font-size: 36px; letter-spacing: 4px; }
+        .splash-subtitle { font-size: 11px; letter-spacing: 2px; margin-bottom: 28px; }
+        .splash-enter { font-size: 14px; padding: 16px 36px; letter-spacing: 3px; }
+        .splash-bg-left, .splash-bg-right { width: 70%; }
+    }
+
     .admin-mode .admin-only {
         display: block
     }
@@ -1627,9 +1735,25 @@
 </head>
 <body>
 
-    <!-- John Walton's Stanley Cup call. Played once on the first user
-         interaction (browsers block sound autoplay). -->
+    <!-- John Walton's Stanley Cup call. Played when the user clicks
+         "Enter" on the intro splash (browsers block sound autoplay). -->
     <audio id="intro-audio" src="/intro.mp3" preload="auto" style="display:none"></audio>
+
+    <!-- Intro splash. Shown on every page load. Clicking Enter dismisses
+         it and plays the Walton Cup call. -->
+    <div id="intro-splash" class="intro-splash">
+        <div class="splash-bg">
+            <div class="splash-bg-left" id="splash-bg-left"></div>
+            <div class="splash-bg-right" id="splash-bg-right"></div>
+        </div>
+        <div class="splash-content">
+            <img id="splash-logo" class="splash-logo" alt="Caps Vault Logo">
+            <h1 class="splash-title">THE VAULT</h1>
+            <div class="splash-subtitle">Washington Capitals Game-Worn Collection</div>
+            <button class="splash-enter" onclick="enterSite()">CLICK TO ENTER</button>
+            <div class="splash-hint">▶ Audio will play</div>
+        </div>
+    </div>
 
     <nav>
         <a class="nav-logo" onclick="showPage('home')">
@@ -2285,6 +2409,34 @@
         const leftBg = document.getElementById('hero-left-bg');
         if (leftBg)
             leftBg.style.backgroundImage = 'url(data:image/png;base64,' + CUBS_B64 + ')';
+        // Splash overlay: same logo, plus the championship-era Ovi/Cubs photos as backdrop.
+        const splashLogo = document.getElementById('splash-logo');
+        if (splashLogo) splashLogo.src = src;
+        const splashLeft = document.getElementById('splash-bg-left');
+        if (splashLeft)
+            splashLeft.style.backgroundImage = 'url(data:image/jpeg;base64,' + CUBS_B64 + ')';
+        const splashRight = document.getElementById('splash-bg-right');
+        if (splashRight)
+            splashRight.style.backgroundImage = 'url(data:image/jpeg;base64,' + OVI_B64 + ')';
+    }
+
+    // Splash dismissal — plays the Walton Cup call and fades out the
+    // overlay. Audio play() is gated on a real user gesture (this click).
+    function enterSite() {
+        const audio = document.getElementById('intro-audio');
+        if (audio) {
+            try {
+                audio.currentTime = 0;
+                audio.volume = 1;
+            } catch (e) {}
+            const p = audio.play();
+            if (p && p.catch) p.catch(e => console.warn('Intro audio blocked:', e));
+        }
+        const splash = document.getElementById('intro-splash');
+        if (splash) {
+            splash.classList.add('dismissed');
+            setTimeout(() => splash.remove(), 800);
+        }
     }
 
     function showPage(name, btn, fromHistory) {
@@ -3341,41 +3493,9 @@
     renderPortfolioGrid();
     renderHomeGrid();
 
-    // Play the intro audio (John Walton Cup call) on the first user
-    // interaction. Browsers block <audio> autoplay with sound, so we
-    // wait for any click/tap/keypress, then fire it once and detach.
-    (function setupIntroAudio() {
-        let played = false;
-        function playOnce() {
-            if (played) return;
-            played = true;
-            const audio = document.getElementById('intro-audio');
-            if (audio) {
-                try {
-                    audio.currentTime = 0;
-                    audio.volume = 1;
-                } catch (e) {}
-                const p = audio.play();
-                if (p && p.catch) p.catch(e => console.warn('Intro audio blocked:', e));
-                // Diagnostic: log whenever the audio stops, in case something
-                // is interrupting it. Visible in DevTools console.
-                audio.addEventListener('pause', () => {
-                    if (audio.currentTime < audio.duration - 0.1) {
-                        console.warn('Intro audio paused early at', audio.currentTime, 'of', audio.duration);
-                    }
-                });
-                audio.addEventListener('ended', () => {
-                    console.log('Intro audio finished cleanly');
-                });
-            }
-            document.removeEventListener('click', playOnce, true);
-            document.removeEventListener('touchstart', playOnce, true);
-            document.removeEventListener('keydown', playOnce, true);
-        }
-        document.addEventListener('click', playOnce, true);
-        document.addEventListener('touchstart', playOnce, true);
-        document.addEventListener('keydown', playOnce, true);
-    })();
+    // Audio playback is now triggered by the intro splash's CLICK TO
+    // ENTER button (see enterSite() above). No document-level click
+    // handler needed — we have an explicit user gesture from the splash.
 
     // ── BROWSER HISTORY / BACK BUTTON SUPPORT ──
     // Set initial state so the first back press brings us to home (or wherever they started)
