@@ -1732,7 +1732,22 @@
         color: var(--caps-red);
         margin-bottom: 14px
     }
+    /* Skip the intro splash on subsequent loads in the same session.
+       Set by enterSite() and read by the inline <script> below. */
+    html.splash-skip .intro-splash { display: none !important; }
     </style>
+
+    <!-- Decide BEFORE body renders whether the splash should appear.
+         If the user already entered the site this session (in this tab),
+         the splash stays hidden and audio doesn't replay. Closing the
+         tab clears sessionStorage, so a fresh visit shows it again. -->
+    <script>
+        try {
+            if (sessionStorage.getItem('vaultEntered') === '1') {
+                document.documentElement.classList.add('splash-skip');
+            }
+        } catch (e) {}
+    </script>
 </head>
 <body>
 
@@ -2422,7 +2437,10 @@
 
     // Splash dismissal — plays the Walton Cup call and fades out the
     // overlay. Audio play() is gated on a real user gesture (this click).
+    // The sessionStorage flag prevents the splash from showing again on
+    // subsequent loads in the same browser tab session.
     function enterSite() {
+        try { sessionStorage.setItem('vaultEntered', '1'); } catch (e) {}
         const audio = document.getElementById('intro-audio');
         if (audio) {
             try {
