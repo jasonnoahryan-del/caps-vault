@@ -1143,25 +1143,26 @@
         inset: 0;
         overflow: hidden;
         pointer-events: none;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1fr 1fr;
+        gap: 4px;
     }
-    .splash-bg-left, .splash-bg-right {
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        width: 55%;
+    .splash-bg-cell {
         background-size: cover;
         background-position: center;
-        opacity: 0.4;
+        opacity: 0.55;
     }
-    .splash-bg-left {
-        left: 0;
-        mask-image: linear-gradient(to right, rgba(0,0,0,1) 0%, transparent 95%);
-        -webkit-mask-image: linear-gradient(to right, rgba(0,0,0,1) 0%, transparent 95%);
-    }
-    .splash-bg-right {
-        right: 0;
-        mask-image: linear-gradient(to left, rgba(0,0,0,1) 0%, transparent 95%);
-        -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,1) 0%, transparent 95%);
+    /* Radial vignette: keep edges photo-rich but darken the center so the
+       logo/title/button remain legible on top. */
+    .splash-bg-overlay {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: radial-gradient(ellipse at center,
+            rgba(2, 15, 31, 0.92) 0%,
+            rgba(2, 15, 31, 0.7) 40%,
+            rgba(2, 15, 31, 0.3) 100%);
     }
     .splash-content {
         position: relative;
@@ -1740,12 +1741,16 @@
     <audio id="intro-audio" src="/intro.mp3" preload="auto" style="display:none"></audio>
 
     <!-- Intro splash. Shown on every page load. Clicking Enter dismisses
-         it and plays the Walton Cup call. -->
+         it and plays the Walton Cup call. The 2x2 photo grid uses the
+         four 2018 championship images in /images/. -->
     <div id="intro-splash" class="intro-splash">
         <div class="splash-bg">
-            <div class="splash-bg-left" id="splash-bg-left"></div>
-            <div class="splash-bg-right" id="splash-bg-right"></div>
+            <div class="splash-bg-cell" style="background-image:url('/images/cup1.jpg')"></div>
+            <div class="splash-bg-cell" style="background-image:url('/images/cup2.jpg')"></div>
+            <div class="splash-bg-cell" style="background-image:url('/images/cup3.jpg')"></div>
+            <div class="splash-bg-cell" style="background-image:url('/images/cup4.jpg')"></div>
         </div>
+        <div class="splash-bg-overlay"></div>
         <div class="splash-content">
             <img id="splash-logo" class="splash-logo" alt="Caps Vault Logo">
             <h1 class="splash-title">THE VAULT</h1>
@@ -2409,15 +2414,10 @@
         const leftBg = document.getElementById('hero-left-bg');
         if (leftBg)
             leftBg.style.backgroundImage = 'url(data:image/png;base64,' + CUBS_B64 + ')';
-        // Splash overlay: same logo, plus the championship-era Ovi/Cubs photos as backdrop.
+        // Splash overlay logo (the four background photos are wired up
+        // directly in the HTML via /images/cup1..4.jpg).
         const splashLogo = document.getElementById('splash-logo');
         if (splashLogo) splashLogo.src = src;
-        const splashLeft = document.getElementById('splash-bg-left');
-        if (splashLeft)
-            splashLeft.style.backgroundImage = 'url(data:image/jpeg;base64,' + CUBS_B64 + ')';
-        const splashRight = document.getElementById('splash-bg-right');
-        if (splashRight)
-            splashRight.style.backgroundImage = 'url(data:image/jpeg;base64,' + OVI_B64 + ')';
     }
 
     // Splash dismissal — plays the Walton Cup call and fades out the
