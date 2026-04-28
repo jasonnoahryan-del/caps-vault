@@ -108,6 +108,27 @@ export async function onRequest(context) {
       return new Response(JSON.stringify(data), { headers: corsHeaders });
     }
 
+    // Save a single editable-text entry (about/contact paragraphs, player
+    // bios, etc.) to KV. Body: { key, text }. Pass text="" to clear.
+    if (action === 'save-text' && request.method === 'POST') {
+      const body = await request.json();
+      const { key, text } = body;
+      if (!key) return new Response(JSON.stringify({ error: 'Missing key' }), { status: 400, headers: corsHeaders });
+      const stored = await env.CAPS_VAULT_KV.get('texts');
+      const texts = stored ? JSON.parse(stored) : {};
+      if (text == null || text === '') delete texts[key];
+      else texts[key] = String(text);
+      await env.CAPS_VAULT_KV.put('texts', JSON.stringify(texts));
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Get all editable-text overrides as a { key: text } map.
+    if (action === 'list-texts') {
+      const stored = await env.CAPS_VAULT_KV.get('texts');
+      const texts = stored ? JSON.parse(stored) : {};
+      return new Response(JSON.stringify({ texts }), { headers: corsHeaders });
+    }
+
     // Save the home page Featured Pieces array to KV (whole array at once,
     // so toggling adds/removes are simple and atomic).
     if (action === 'save-featured' && request.method === 'POST') {
@@ -131,6 +152,7 @@ export async function onRequest(context) {
       for (const key of list.keys) {
         if (key.name.startsWith('cover:')) continue;
         if (key.name === 'featured') continue;
+        if (key.name === 'texts') continue;
         data[key.name] = await env.CAPS_VAULT_KV.get(key.name);
       }
       return new Response(JSON.stringify(data), { headers: corsHeaders });

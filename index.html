@@ -1131,6 +1131,27 @@
         display: flex
     }
 
+    /* Inline-editable text: gold dashed outline when admin is logged in,
+       solid when focused. Visitors don't see anything. */
+    .admin-mode [data-edit-id] {
+        outline: 1px dashed rgba(184, 150, 12, 0.45);
+        outline-offset: 4px;
+        cursor: text;
+        transition: outline-color 0.2s, background 0.4s;
+    }
+    .admin-mode [data-edit-id]:hover {
+        outline-color: rgba(184, 150, 12, 0.85);
+    }
+    .admin-mode [data-edit-id]:focus {
+        outline: 2px solid var(--caps-gold);
+        outline-offset: 4px;
+    }
+    .admin-mode [data-edit-id]:empty::before {
+        content: 'Click to add text…';
+        color: rgba(184, 150, 12, 0.6);
+        font-style: italic;
+    }
+
     .admin-only-flex {
         display: none
     }
@@ -1726,9 +1747,9 @@
             <div class="content-page" style="position:relative;z-index:2">
                 <h1>About the Collection</h1>
                 <div class="red-line"></div>
-                <p>Welcome to The Vault — a personal collection dedicated to Washington Capitals memorabilia spanning decades of hockey history. Every piece in this collection has been carefully sourced, authenticated, and preserved.</p>
-                <p>From game-worn jerseys to signed pucks, from rare trading cards to game-used sticks, this collection represents a lifelong passion for the Washington Capitals and the sport of hockey.</p>
-                <p>Each item comes with its own story — where it was worn, who used it, and what moment in Capitals history it represents. The collection is a living archive of the franchise's greatest moments and players.</p>
+                <p data-edit-id="about-p1">Welcome to The Vault — a personal collection dedicated to Washington Capitals memorabilia spanning decades of hockey history. Every piece in this collection has been carefully sourced, authenticated, and preserved.</p>
+                <p data-edit-id="about-p2">From game-worn jerseys to signed pucks, from rare trading cards to game-used sticks, this collection represents a lifelong passion for the Washington Capitals and the sport of hockey.</p>
+                <p data-edit-id="about-p3">Each item comes with its own story — where it was worn, who used it, and what moment in Capitals history it represents. The collection is a living archive of the franchise's greatest moments and players.</p>
                 <div style="margin-top:36px;border-top:1px solid rgba(200,16,46,0.3);padding-top:32px">
                     <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border:1px solid rgba(200,16,46,0.25)">
                         <iframe src="https://www.youtube.com/embed/T9aZpF9M6pI" title="About the Collection" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%"></iframe>
@@ -1743,7 +1764,7 @@
         <div class="content-page">
             <h1>Contact</h1>
             <div class="red-line"></div>
-            <p>Have questions about the collection, or interested in a specific piece? Get in touch.</p>
+            <p data-edit-id="contact-intro">Have questions about the collection, or interested in a specific piece? Get in touch.</p>
             <div class="contact-form">
                 <div class="contact-row">
                     <label class="form-label">Your Name</label>
@@ -2469,17 +2490,26 @@
         const heroEl = document.getElementById('player-hero');
         const heroImg = document.getElementById('player-hero-img');
         const heroBio = document.getElementById('player-hero-bio');
-        const bio = playerBios[sg.name];
+        // Edit-aware bio: overrides from KV beat the hardcoded playerBios.
+        // Admins always see the bio sections so they can add a bio for
+        // players who don't have one yet.
+        const bioOverride = textOverrides['bio:' + sg.name];
+        const baseBio = playerBios[sg.name];
+        const bio = bioOverride != null ? bioOverride : (baseBio || '');
         const heroSrc = playerHeroImages[sg.name];
 
-        if (heroSrc && bio) {
+        if (heroSrc && (bio || isAdmin)) {
             heroImg.src = heroSrc;
             heroBio.textContent = bio;
+            heroBio.dataset.editId = 'bio:' + sg.name;
+            if (isAdmin) markEditable(heroBio);
             heroEl.classList.add('visible');
             bioSection.style.display = 'none';
-        } else if (bio) {
+        } else if (bio || isAdmin) {
             heroEl.classList.remove('visible');
             bioText.textContent = bio;
+            bioText.dataset.editId = 'bio:' + sg.name;
+            if (isAdmin) markEditable(bioText);
             bioSection.style.display = 'block';
             // Show nameplate if available
             const nameplateContainer = document.getElementById('player-nameplate-container');
@@ -3140,6 +3170,120 @@
         }
     }
 
+    // ── EDITABLE TEXT (about page, contact page, player bios) ──
+    // Admin can click any element with [data-edit-id] when logged in and
+    // type to edit. Auto-saves on blur, syncs to KV so all visitors see
+    // the new text. Server is the source of truth.
+    let textOverrides = {};
+
+    async function loadTextsFromKV() {
+        try {
+            const resp = await fetch('/api/smugmug?action=list-texts');
+            if (!resp.ok) return;
+            const data = await resp.json();
+            if (data.texts && typeof data.texts === 'object') {
+                textOverrides = data.texts;
+                applyStaticTextOverrides();
+                // If a player gallery is currently visible, refresh its bio.
+                refreshCurrentBio();
+            }
+        } catch (e) {
+            console.warn('Texts KV load failed:', e);
+        }
+    }
+
+    function applyStaticTextOverrides() {
+        document.querySelectorAll('[data-edit-id]').forEach(el => {
+            const id = el.dataset.editId;
+            if (!id || id.startsWith('bio:')) return; // bios applied per-render
+            if (textOverrides[id] != null) el.textContent = textOverrides[id];
+        });
+    }
+
+    function refreshCurrentBio() {
+        const subPage = document.getElementById('page-subgallery');
+        if (!subPage || !subPage.classList.contains('active')) return;
+        const sg = collectionData[currentPortfolio]?.[currentSubGalleryIndex];
+        if (sg) applyBioFor(sg);
+    }
+
+    // Resolve and apply the bio for the current player gallery.
+    // Override beats the hardcoded playerBios, beats nothing.
+    function applyBioFor(sg) {
+        const key = 'bio:' + sg.name;
+        const overrideBio = textOverrides[key];
+        const baseBio = playerBios[sg.name] || '';
+        const bio = overrideBio != null ? overrideBio : baseBio;
+        const bioTextEl = document.getElementById('player-bio-text');
+        const heroBioEl = document.getElementById('player-hero-bio');
+        if (bioTextEl) {
+            bioTextEl.textContent = bio;
+            bioTextEl.dataset.editId = key;
+            if (isAdmin) markEditable(bioTextEl);
+        }
+        if (heroBioEl) {
+            heroBioEl.textContent = bio;
+            heroBioEl.dataset.editId = key;
+            if (isAdmin) markEditable(heroBioEl);
+        }
+    }
+
+    function markEditable(el) {
+        if (!el) return;
+        el.contentEditable = 'true';
+        el.spellcheck = true;
+        if (!el._editorBound) {
+            el._editorBound = true;
+            el.addEventListener('blur', onEditableBlur);
+            // Prevent Enter from inserting <div>/<br> chaos — keep it as a
+            // soft break, but also let users press Enter to commit (blur).
+            el.addEventListener('keydown', e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    el.blur();
+                }
+            });
+        }
+    }
+
+    function unmarkEditable(el) {
+        if (!el) return;
+        el.contentEditable = 'false';
+    }
+
+    function onEditableBlur(e) {
+        const el = e.currentTarget;
+        const key = el.dataset.editId;
+        if (!key) return;
+        const newText = (el.innerText || el.textContent || '').replace(/\s+$/g, '');
+        const currentValue = textOverrides[key];
+        if (newText === (currentValue ?? '') || newText === '' && currentValue == null) return;
+        textOverrides[key] = newText;
+        // Optimistic gold flash; turns red on failure.
+        const orig = el.style.background;
+        el.style.background = 'rgba(184,150,12,0.18)';
+        fetch('/api/smugmug?action=save-text', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key, text: newText })
+        }).then(r => {
+            if (!r.ok) throw new Error('Save failed: ' + r.status);
+            setTimeout(() => { el.style.background = orig; }, 500);
+        }).catch(err => {
+            console.warn('Text save failed:', err);
+            el.style.background = 'rgba(200,16,46,0.25)';
+            setTimeout(() => { el.style.background = orig; }, 1500);
+        });
+    }
+
+    function enableTextEditing() {
+        document.querySelectorAll('[data-edit-id]').forEach(markEditable);
+    }
+
+    function disableTextEditing() {
+        document.querySelectorAll('[data-edit-id]').forEach(unmarkEditable);
+    }
+
     // Load admin-chosen Featured Pieces from KV so every visitor sees the
     // same lineup, not just the browser that toggled them.
     async function loadFeaturedFromKV() {
@@ -3189,6 +3333,7 @@
     loadFromKV();
     loadCoversFromKV();
     loadFeaturedFromKV();
+    loadTextsFromKV();
     renderPortfolioGrid();
     renderHomeGrid();
 
@@ -3284,6 +3429,10 @@
             renderMediaGrid && renderMediaGrid();
             renderSubGalleryGrid && renderSubGalleryGrid();
             renderHomeGrid();
+            enableTextEditing();
+            // If a player gallery is currently shown, re-render its bio so
+            // the inline editor binds to the bio paragraph too.
+            refreshCurrentBio();
         } else {
             document.getElementById('login-error').textContent = 'Incorrect password';
             document.getElementById('admin-password').value = '';
@@ -3295,6 +3444,7 @@
         isAdmin = false;
         document.body.classList.remove('admin-mode');
         document.getElementById('admin-bar').style.display = 'none';
+        disableTextEditing();
         renderMediaGrid && renderMediaGrid();
         renderSubGalleryGrid && renderSubGalleryGrid();
         renderHomeGrid();
