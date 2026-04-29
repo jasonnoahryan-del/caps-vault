@@ -1267,6 +1267,12 @@
         display: flex
     }
 
+    /* Inline-editable text: preserve line breaks for everyone (so when
+       the admin types a paragraph break, visitors see it too). */
+    [data-edit-id] {
+        white-space: pre-wrap;
+    }
+
     /* Inline-editable text: gold dashed outline when admin is logged in,
        solid when focused. Visitors don't see anything. */
     .admin-mode [data-edit-id] {
@@ -3436,13 +3442,17 @@
         if (!el) return;
         el.contentEditable = 'true';
         el.spellcheck = true;
+        // Render newlines as actual line breaks so multi-paragraph edits
+        // display correctly. Press Enter twice for a paragraph break.
+        el.style.whiteSpace = 'pre-wrap';
         if (!el._editorBound) {
             el._editorBound = true;
             el.addEventListener('blur', onEditableBlur);
-            // Prevent Enter from inserting <div>/<br> chaos — keep it as a
-            // soft break, but also let users press Enter to commit (blur).
+            // Press Escape to commit and lose focus. Enter inserts a line
+            // break (Shift+Enter also works). To save, click outside the
+            // text or press Escape.
             el.addEventListener('keydown', e => {
-                if (e.key === 'Enter' && !e.shiftKey) {
+                if (e.key === 'Escape') {
                     e.preventDefault();
                     el.blur();
                 }
