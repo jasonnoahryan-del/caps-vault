@@ -129,6 +129,27 @@ export async function onRequest(context) {
       return new Response(JSON.stringify({ texts }), { headers: corsHeaders });
     }
 
+    // Save a Browse-page (category) cover URL to KV. Body: { categoryId, coverUrl }.
+    // Pass null/empty coverUrl to clear it.
+    if (action === 'save-portfolio-cover' && request.method === 'POST') {
+      const body = await request.json();
+      const { categoryId, coverUrl } = body;
+      if (!categoryId) return new Response(JSON.stringify({ error: 'Missing categoryId' }), { status: 400, headers: corsHeaders });
+      const stored = await env.CAPS_VAULT_KV.get('portfolioCovers');
+      const covers = stored ? JSON.parse(stored) : {};
+      if (coverUrl) covers[categoryId] = coverUrl;
+      else delete covers[categoryId];
+      await env.CAPS_VAULT_KV.put('portfolioCovers', JSON.stringify(covers));
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Get all saved Browse-page (category) covers as { categoryId: coverUrl, ... }
+    if (action === 'list-portfolio-covers') {
+      const stored = await env.CAPS_VAULT_KV.get('portfolioCovers');
+      const covers = stored ? JSON.parse(stored) : {};
+      return new Response(JSON.stringify({ covers }), { headers: corsHeaders });
+    }
+
     // Save the home page Featured Pieces array to KV (whole array at once,
     // so toggling adds/removes are simple and atomic).
     if (action === 'save-featured' && request.method === 'POST') {
@@ -153,6 +174,7 @@ export async function onRequest(context) {
         if (key.name.startsWith('cover:')) continue;
         if (key.name === 'featured') continue;
         if (key.name === 'texts') continue;
+        if (key.name === 'portfolioCovers') continue;
         data[key.name] = await env.CAPS_VAULT_KV.get(key.name);
       }
       return new Response(JSON.stringify(data), { headers: corsHeaders });

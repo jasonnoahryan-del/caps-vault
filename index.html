@@ -2036,6 +2036,7 @@
                 <div class="lightbox-counter" id="lightbox-counter"></div>
                 <div class="lightbox-btns">
                     <button class="lightbox-close admin-only" id="feature-btn" onclick="toggleFeatured()" style="border-color:rgba(184,150,12,0.5);color:#b8960c">★ Feature</button>
+                    <button class="lightbox-close admin-only" id="browse-cover-btn" onclick="setAsBrowseCover()" style="border-color:rgba(184,150,12,0.5);color:#b8960c">⊙ Set as Browse Cover</button>
                     <button class="lightbox-close" onclick="closeLightboxBtn()">✕ Close</button>
                 </div>
             </div>
@@ -3031,6 +3032,44 @@
         }, 50);
     }
 
+    // Make the currently lightboxed photo the Browse-page cover for its
+    // parent category. Saves to KV so all visitors see it. Only http URLs
+    // are accepted because base64 uploads can't be served to other devices.
+    function setAsBrowseCover() {
+        const item = currentLightboxItem;
+        if (!item || !currentPortfolio) return;
+        const coverUrl = (item.largeUrl && item.largeUrl.startsWith('http')) ? item.largeUrl
+                       : (item.thumbUrl && item.thumbUrl.startsWith('http')) ? item.thumbUrl
+                       : (item.src && item.src.startsWith('http')) ? item.src
+                       : null;
+        if (!coverUrl) {
+            alert('Browse covers must be SmugMug images. Locally uploaded photos cannot be served to other visitors.');
+            return;
+        }
+        // Update local state and re-render the Browse grid.
+        portfolioCovers[currentPortfolio] = coverUrl;
+        renderPortfolioGrid();
+        // Persist to KV.
+        fetch('/api/smugmug?action=save-portfolio-cover', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ categoryId: currentPortfolio, coverUrl })
+        }).catch(e => console.warn('Browse cover sync failed:', e));
+        // Visual feedback on the button.
+        const btn = document.getElementById('browse-cover-btn');
+        if (btn) {
+            const orig = btn.textContent;
+            btn.textContent = '✓ Browse Cover Set';
+            btn.style.background = '#1a7a3a';
+            btn.style.color = '#fff';
+            setTimeout(() => {
+                btn.textContent = orig;
+                btn.style.background = 'transparent';
+                btn.style.color = '#b8960c';
+            }, 1500);
+        }
+    }
+
     // Toggle whether the currently lightboxed photo appears in the home page
     // "Featured Pieces" grid. Updates local state, persists to localStorage,
     // and pushes the new array to KV so every visitor and device sees the
@@ -3498,6 +3537,23 @@
         document.querySelectorAll('[data-edit-id]').forEach(unmarkEditable);
     }
 
+    // Load admin-chosen Browse-page (category) covers from KV. Merged
+    // into the existing portfolioCovers object — KV entries override the
+    // hardcoded defaults.
+    async function loadPortfolioCoversFromKV() {
+        try {
+            const resp = await fetch('/api/smugmug?action=list-portfolio-covers');
+            if (!resp.ok) return;
+            const data = await resp.json();
+            if (data.covers && typeof data.covers === 'object') {
+                Object.assign(portfolioCovers, data.covers);
+                renderPortfolioGrid();
+            }
+        } catch (e) {
+            console.warn('Portfolio covers KV load failed:', e);
+        }
+    }
+
     // Load admin-chosen Featured Pieces from KV so every visitor sees the
     // same lineup, not just the browser that toggled them.
     async function loadFeaturedFromKV() {
@@ -3546,6 +3602,7 @@
     loadCollection();
     loadFromKV();
     loadCoversFromKV();
+    loadPortfolioCoversFromKV();
     loadFeaturedFromKV();
     loadTextsFromKV();
     renderPortfolioGrid();
