@@ -1128,6 +1128,41 @@
         font-size: 20px
     }
 
+    /* ── WANTS PAGE ── */
+    .wants-list-wrap {
+        margin-top: 8px;
+        margin-bottom: 36px;
+    }
+    .wants-list {
+        font-family: 'Merriweather', serif;
+        font-size: 17px;
+        line-height: 1.9;
+        color: #d4d8df;
+        padding: 24px 28px;
+        background: rgba(4, 30, 66, 0.55);
+        border-left: 3px solid var(--caps-red);
+        border-radius: 2px;
+        min-height: 120px;
+    }
+    .wants-contact {
+        padding-top: 28px;
+        border-top: 1px solid rgba(200, 16, 46, 0.25);
+    }
+    .wants-contact-label {
+        font-family: 'Oswald', sans-serif;
+        font-size: 12px;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        color: var(--caps-red);
+        margin-bottom: 8px;
+    }
+    .wants-email {
+        font-family: 'Oswald', sans-serif;
+        font-size: 22px;
+        letter-spacing: 1px;
+        color: var(--caps-white);
+    }
+
     .contact-form {
         margin-top: 32px
     }
@@ -1992,7 +2027,7 @@
             <button class="nav-link active" onclick="showPage('home',this)">Home</button>
             <button class="nav-link" onclick="showPage('browse',this)">Browse</button>
             <button class="nav-link" onclick="showPage('about',this)">About</button>
-            <button class="nav-link" onclick="showPage('contact',this)">Contact</button>
+            <button class="nav-link" onclick="showPage('contact',this)">Wants</button>
             <button class="nav-search-btn" onclick="openSearch()" aria-label="Search">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="20" y1="20" x2="16.5" y2="16.5"></line></svg>
                 <span>Search</span>
@@ -2138,25 +2173,27 @@
 
     <!-- CONTACT PAGE -->
     <div id="page-contact" class="page">
-        <div class="content-page">
-            <h1>Contact</h1>
-            <div class="red-line"></div>
-            <p data-edit-id="contact-intro">Have questions about the collection, or interested in a specific piece? Get in touch.</p>
-            <div class="contact-form">
-                <div class="contact-row">
-                    <label class="form-label">Your Name</label>
-                    <input class="form-input" type="text" placeholder="Name">
+        <div style="position:relative;display:flex;min-height:600px;background:var(--caps-dark)">
+            <!-- Left and right image slots (placeholders for now — drop a
+                 photo URL into the background-image style when ready). -->
+            <div id="wants-bg-left" style="position:absolute;left:0;top:0;bottom:0;width:24%;background-size:cover;background-position:center;opacity:0.3;mask-image:linear-gradient(to right, rgba(0,0,0,1) 0%, transparent 95%);-webkit-mask-image:linear-gradient(to right, rgba(0,0,0,1) 0%, transparent 95%)"></div>
+            <div id="wants-bg-right" style="position:absolute;right:0;top:0;bottom:0;width:24%;background-size:cover;background-position:center;opacity:0.3;mask-image:linear-gradient(to left, rgba(0,0,0,1) 0%, transparent 95%);-webkit-mask-image:linear-gradient(to left, rgba(0,0,0,1) 0%, transparent 95%)"></div>
+
+            <!-- Center content -->
+            <div class="content-page" style="position:relative;z-index:2">
+                <h1>Jerseys &amp; Equipment I Would Like to Add</h1>
+                <div class="red-line"></div>
+                <p data-edit-id="wants-intro" style="margin-bottom:24px">A running list of pieces I'd love to track down. If you have one of these — or anything else from the Capitals you'd like to discuss — reach out.</p>
+                <div class="wants-list-wrap">
+                    <div class="wants-list" data-edit-id="wants-list">— Carlson 2014 alternate jersey
+— Backstrom 2018 home jersey with Cup patch
+— Ovechkin game-used gloves
+— Holtby blocker
+— Add your wants here…</div>
                 </div>
-                <div class="contact-row">
-                    <label class="form-label">Email Address</label>
-                    <input class="form-input" type="email" placeholder="email@example.com">
-                </div>
-                <div class="contact-row">
-                    <label class="form-label">Message</label>
-                    <textarea class="form-input" rows="5" placeholder="Your message..."></textarea>
-                </div>
-                <div style="margin-top:16px">
-                    <button class="btn-primary">Send Message</button>
+                <div class="wants-contact">
+                    <div class="wants-contact-label">Get in touch</div>
+                    <div class="wants-email" data-edit-id="wants-email">your-email@example.com</div>
                 </div>
             </div>
         </div>
