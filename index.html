@@ -224,6 +224,33 @@
     .btn-secondary:hover {
         border-color: var(--caps-white)
     }/* PHOTO GRID on home */
+    .home-intro {
+        padding: 48px 32px 16px;
+        background: var(--caps-navy);
+        max-width: 980px;
+        margin: 0 auto;
+    }
+    .home-intro h2 {
+        font-family: 'Oswald', sans-serif;
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        color: var(--caps-red);
+        margin-bottom: 6px;
+    }
+    .home-intro p {
+        font-family: 'Merriweather', serif;
+        font-size: 17px;
+        line-height: 1.8;
+        color: #cdd1d8;
+        margin: 0;
+    }
+    @media (max-width: 600px) {
+        .home-intro { padding: 32px 18px 8px; }
+        .home-intro p { font-size: 15px; line-height: 1.7; }
+    }
+
     .home-gallery {
         padding: 40px 32px;
         background: var(--caps-navy)
@@ -1801,6 +1828,11 @@
                 </div>
             </div>
         </div>
+        <section class="home-intro">
+            <h2>About the Collection</h2>
+            <div class="section-line"></div>
+            <p data-edit-id="home-intro-p1">Welcome to The Vault — a personal collection dedicated to Washington Capitals memorabilia spanning decades of hockey history. Every piece has been carefully sourced, authenticated, and preserved.</p>
+        </section>
         <div class="home-gallery">
             <h2>Featured Pieces</h2>
             <div class="section-line"></div>
