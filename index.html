@@ -1772,6 +1772,174 @@
         color: var(--caps-red);
         margin-bottom: 14px
     }
+    /* ── SEARCH ── */
+    .nav-search-btn {
+        background: transparent;
+        border: 1px solid rgba(255,255,255,0.15);
+        color: #aaa;
+        font-family: 'Oswald', sans-serif;
+        font-size: 13px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        padding: 8px 14px;
+        margin-left: 12px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.15s ease;
+    }
+    .nav-search-btn:hover {
+        border-color: var(--caps-red);
+        color: var(--caps-white);
+    }
+    .nav-search-btn svg {
+        width: 14px;
+        height: 14px;
+    }
+    .search-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 9000;
+        background: rgba(2, 15, 31, 0.92);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        padding-top: 80px;
+    }
+    .search-overlay.open {
+        display: flex;
+    }
+    .search-box {
+        width: min(720px, 92vw);
+        background: var(--caps-dark);
+        border: 2px solid var(--caps-red);
+        border-radius: 4px;
+        overflow: hidden;
+        max-height: calc(100vh - 140px);
+        display: flex;
+        flex-direction: column;
+    }
+    .search-input-row {
+        display: flex;
+        align-items: center;
+        padding: 18px 24px;
+        gap: 14px;
+        border-bottom: 1px solid rgba(200, 16, 46, 0.3);
+    }
+    .search-input-row svg {
+        width: 18px;
+        height: 18px;
+        color: var(--caps-red);
+        flex-shrink: 0;
+    }
+    .search-input {
+        flex: 1;
+        background: transparent;
+        border: none;
+        outline: none;
+        color: var(--caps-white);
+        font-family: 'Oswald', sans-serif;
+        font-size: 22px;
+        letter-spacing: 1px;
+    }
+    .search-input::placeholder {
+        color: rgba(255, 255, 255, 0.35);
+    }
+    .search-close {
+        background: transparent;
+        border: 1px solid rgba(255,255,255,0.2);
+        color: #aaa;
+        font-family: 'Oswald', sans-serif;
+        font-size: 11px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        padding: 6px 10px;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    .search-close:hover {
+        border-color: var(--caps-white);
+        color: var(--caps-white);
+    }
+    .search-results {
+        overflow-y: auto;
+        max-height: calc(100vh - 220px);
+    }
+    .search-result {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 12px 24px;
+        cursor: pointer;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        transition: background 0.1s ease;
+    }
+    .search-result:hover, .search-result.focused {
+        background: rgba(200, 16, 46, 0.18);
+    }
+    .search-result-thumb {
+        width: 60px;
+        height: 60px;
+        background: var(--caps-navy);
+        flex-shrink: 0;
+        border: 1px solid rgba(255,255,255,0.08);
+        background-size: cover;
+        background-position: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+        opacity: 0.95;
+    }
+    .search-result-text {
+        flex: 1;
+        min-width: 0;
+    }
+    .search-result-name {
+        font-family: 'Oswald', sans-serif;
+        font-size: 16px;
+        font-weight: 600;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        color: var(--caps-white);
+        margin-bottom: 3px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .search-result-meta {
+        font-family: 'Oswald', sans-serif;
+        font-size: 11px;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        color: #888;
+    }
+    .search-result mark {
+        background: rgba(184, 150, 12, 0.3);
+        color: var(--caps-white);
+        padding: 0 2px;
+        border-radius: 2px;
+    }
+    .search-empty {
+        padding: 28px 24px;
+        text-align: center;
+        font-family: 'Oswald', sans-serif;
+        font-size: 13px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: #666;
+    }
+    @media (max-width: 600px) {
+        .search-overlay { padding-top: 24px; }
+        .search-input { font-size: 18px; }
+        .search-input-row { padding: 14px 16px; }
+        .search-result { padding: 10px 16px; }
+        .nav-search-btn span { display: none; }
+    }
+
     /* Skip the intro splash on subsequent loads in the same session.
        Set by enterSite() and read by the inline <script> below. */
     html.splash-skip .intro-splash { display: none !important; }
@@ -1825,8 +1993,24 @@
             <button class="nav-link" onclick="showPage('browse',this)">Browse</button>
             <button class="nav-link" onclick="showPage('about',this)">About</button>
             <button class="nav-link" onclick="showPage('contact',this)">Contact</button>
+            <button class="nav-search-btn" onclick="openSearch()" aria-label="Search">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="20" y1="20" x2="16.5" y2="16.5"></line></svg>
+                <span>Search</span>
+            </button>
         </div>
     </nav>
+
+    <!-- SEARCH OVERLAY -->
+    <div class="search-overlay" id="search-overlay" onclick="if(event.target===this)closeSearch()">
+        <div class="search-box">
+            <div class="search-input-row">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="20" y1="20" x2="16.5" y2="16.5"></line></svg>
+                <input type="text" class="search-input" id="search-input" placeholder="Search players, jerseys, equipment…" oninput="renderSearchResults()" onkeydown="searchKey(event)">
+                <button class="search-close" onclick="closeSearch()">Esc</button>
+            </div>
+            <div class="search-results" id="search-results"></div>
+        </div>
+    </div>
 
     <!-- HOME PAGE -->
     <div id="page-home" class="page active">
@@ -3041,6 +3225,143 @@
                 });
         }, 50);
     }
+
+    // ── SEARCH ──
+    // Searches every sub-gallery across every category by name. Live
+    // updates as the user types. Click a result to jump to that gallery.
+    let searchFocusedIdx = -1;
+    let searchLastResults = [];
+
+    function openSearch() {
+        const overlay = document.getElementById('search-overlay');
+        const input = document.getElementById('search-input');
+        if (!overlay || !input) return;
+        overlay.classList.add('open');
+        input.value = '';
+        searchFocusedIdx = -1;
+        renderSearchResults();
+        // Focus after the next paint so the keyboard pops on mobile.
+        setTimeout(() => input.focus(), 30);
+    }
+
+    function closeSearch() {
+        const overlay = document.getElementById('search-overlay');
+        if (overlay) overlay.classList.remove('open');
+        searchFocusedIdx = -1;
+    }
+
+    function searchKey(e) {
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            closeSearch();
+            return;
+        }
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (searchLastResults.length === 0) return;
+            searchFocusedIdx = Math.min(searchLastResults.length - 1, searchFocusedIdx + 1);
+            updateSearchFocus();
+            return;
+        }
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (searchLastResults.length === 0) return;
+            searchFocusedIdx = Math.max(0, searchFocusedIdx - 1);
+            updateSearchFocus();
+            return;
+        }
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const idx = searchFocusedIdx >= 0 ? searchFocusedIdx : 0;
+            const r = searchLastResults[idx];
+            if (r) goToSearchResult(r.catId, r.sgIndex);
+        }
+    }
+
+    function updateSearchFocus() {
+        const results = document.querySelectorAll('.search-result');
+        results.forEach((el, i) => el.classList.toggle('focused', i === searchFocusedIdx));
+        const focused = results[searchFocusedIdx];
+        if (focused) focused.scrollIntoView({ block: 'nearest' });
+    }
+
+    function escapeRegex(s) {
+        return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function highlightMatch(text, query) {
+        if (!query) return text;
+        const escapedText = String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const re = new RegExp('(' + escapeRegex(query) + ')', 'gi');
+        return escapedText.replace(re, '<mark>$1</mark>');
+    }
+
+    function renderSearchResults() {
+        const input = document.getElementById('search-input');
+        const out = document.getElementById('search-results');
+        if (!input || !out) return;
+        const raw = input.value.trim();
+        const q = raw.toLowerCase();
+        const results = [];
+        if (q.length === 0) {
+            // Empty state: prompt the user.
+            out.innerHTML = '<div class="search-empty">Type a name to search across every category</div>';
+            searchLastResults = [];
+            searchFocusedIdx = -1;
+            return;
+        }
+        // Walk every category × every sub-gallery; match name substring.
+        Object.keys(collectionData).forEach(catId => {
+            const cat = portfolios.find(p => p.id === catId);
+            const catName = cat ? cat.name : catId;
+            const catIcon = cat ? cat.icon : '🏒';
+            collectionData[catId].forEach((sg, sgIndex) => {
+                if (!sg || !sg.name) return;
+                if (sg.name.toLowerCase().includes(q)) {
+                    results.push({ catId, catName, catIcon, sg, sgIndex });
+                }
+            });
+        });
+        searchLastResults = results;
+        if (results.length === 0) {
+            out.innerHTML = `<div class="search-empty">No matches for "${raw.replace(/</g, '&lt;')}"</div>`;
+            searchFocusedIdx = -1;
+            return;
+        }
+        searchFocusedIdx = 0;
+        out.innerHTML = results.map((r, i) => {
+            const thumb = r.sg.cover
+                ? `style="background-image:url('${String(r.sg.cover).replace(/'/g, "\\'")}')"`
+                : '';
+            const fallback = r.sg.cover ? '' : r.catIcon;
+            return `<div class="search-result ${i === 0 ? 'focused' : ''}" onclick="goToSearchResult('${r.catId}', ${r.sgIndex})">
+                <div class="search-result-thumb" ${thumb}>${fallback}</div>
+                <div class="search-result-text">
+                    <div class="search-result-name">${highlightMatch(r.sg.name, raw)}</div>
+                    <div class="search-result-meta">${r.catName} · ${r.sg.items.length} ${r.sg.items.length === 1 ? 'item' : 'items'}</div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function goToSearchResult(catId, sgIndex) {
+        closeSearch();
+        if (!collectionData[catId] || !collectionData[catId][sgIndex]) return;
+        openPortfolio(catId);
+        openSubGallery(sgIndex);
+    }
+
+    // Keyboard shortcut: "/" or "Cmd-K" / "Ctrl-K" anywhere opens search.
+    document.addEventListener('keydown', e => {
+        const overlay = document.getElementById('search-overlay');
+        if (overlay && overlay.classList.contains('open')) return; // already handled
+        const target = e.target;
+        const inField = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+        if ((e.key === '/' && !inField) || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k')) {
+            e.preventDefault();
+            openSearch();
+        }
+    });
 
     // ── SUB-GALLERY DRAG-AND-DROP REORDERING ──
     // Admin can drag tiles on the gallery list page to reorder them
