@@ -129,6 +129,26 @@ export async function onRequest(context) {
       return new Response(JSON.stringify({ texts }), { headers: corsHeaders });
     }
 
+    // Save the order of sub-galleries within a category. Body:
+    // { categoryId, order: ["Player Name", "Player Name", ...] }
+    if (action === 'save-gallery-order' && request.method === 'POST') {
+      const body = await request.json();
+      const { categoryId, order } = body;
+      if (!categoryId || !Array.isArray(order)) return new Response(JSON.stringify({ error: 'Missing categoryId or order' }), { status: 400, headers: corsHeaders });
+      const stored = await env.CAPS_VAULT_KV.get('galleryOrders');
+      const orders = stored ? JSON.parse(stored) : {};
+      orders[categoryId] = order;
+      await env.CAPS_VAULT_KV.put('galleryOrders', JSON.stringify(orders));
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Get all saved gallery orders. Returns { categoryId: [name, name, ...], ... }
+    if (action === 'list-gallery-orders') {
+      const stored = await env.CAPS_VAULT_KV.get('galleryOrders');
+      const orders = stored ? JSON.parse(stored) : {};
+      return new Response(JSON.stringify({ orders }), { headers: corsHeaders });
+    }
+
     // Save a Browse-page (category) cover URL to KV. Body: { categoryId, coverUrl }.
     // Pass null/empty coverUrl to clear it.
     if (action === 'save-portfolio-cover' && request.method === 'POST') {
@@ -175,6 +195,7 @@ export async function onRequest(context) {
         if (key.name === 'featured') continue;
         if (key.name === 'texts') continue;
         if (key.name === 'portfolioCovers') continue;
+        if (key.name === 'galleryOrders') continue;
         data[key.name] = await env.CAPS_VAULT_KV.get(key.name);
       }
       return new Response(JSON.stringify(data), { headers: corsHeaders });

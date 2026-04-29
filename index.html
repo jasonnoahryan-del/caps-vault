@@ -571,6 +571,13 @@
         align-items: center
     }
 
+    .subgallery-card.dragging {
+        opacity: 0.35;
+    }
+    .subgallery-card.drag-over .subgallery-card-img {
+        border-color: var(--caps-gold);
+        box-shadow: inset 0 0 0 2px var(--caps-gold);
+    }
     .subgallery-card:hover {
         transform: translateY(-4px)
     }
@@ -2566,8 +2573,11 @@
     function renderSubGalleryGrid() {
         const galleries = collectionData[currentPortfolio];
         const grid = document.getElementById('subgallery-grid');
+        // Admin gets draggable tiles for reordering. The drag handlers
+        // read the index from data-sg-index on the dragged element.
         let html = galleries.map((sg, i) => `
-    <div class="subgallery-card" onclick="openSubGallery(${i})">
+    <div class="subgallery-card" data-sg-index="${i}" onclick="openSubGallery(${i})"${
+            isAdmin ? ` draggable="true" ondragstart="sgDragStart(event)" ondragover="sgDragOver(event)" ondrop="sgDrop(event)" ondragend="sgDragEnd(event)" ondragenter="sgDragEnter(event)" ondragleave="sgDragLeave(event)"` : ''}>
       <div class="subgallery-card-img">
         ${
         sg.cover ? `<img src="${sg.cover}" alt="${sg.name}">` : `<span style="font-size:48px;opacity:0.2">🏒</span>`}
@@ -3030,6 +3040,113 @@
                     inline: 'center'
                 });
         }, 50);
+    }
+
+    // ── SUB-GALLERY DRAG-AND-DROP REORDERING ──
+    // Admin can drag tiles on the gallery list page to reorder them
+    // within a category. Order is saved to KV so all visitors see it.
+    let sgDragSrcIndex = null;
+    let sgClickSuppressUntil = 0;
+
+    function sgDragStart(e) {
+        const card = e.target.closest('.subgallery-card');
+        if (!card) return;
+        sgDragSrcIndex = parseInt(card.dataset.sgIndex, 10);
+        card.classList.add('dragging');
+        try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(sgDragSrcIndex)); } catch (_) {}
+    }
+    function sgDragOver(e) {
+        if (sgDragSrcIndex == null) return;
+        e.preventDefault();
+        try { e.dataTransfer.dropEffect = 'move'; } catch (_) {}
+    }
+    function sgDragEnter(e) {
+        const card = e.target.closest('.subgallery-card');
+        if (!card || card.classList.contains('add-subgallery-tile')) return;
+        card.classList.add('drag-over');
+    }
+    function sgDragLeave(e) {
+        const card = e.target.closest('.subgallery-card');
+        if (!card) return;
+        card.classList.remove('drag-over');
+    }
+    function sgDrop(e) {
+        e.preventDefault();
+        const targetCard = e.target.closest('.subgallery-card');
+        if (!targetCard || targetCard.classList.contains('add-subgallery-tile')) {
+            sgDragSrcIndex = null;
+            return;
+        }
+        const srcIdx = sgDragSrcIndex;
+        const dstIdx = parseInt(targetCard.dataset.sgIndex, 10);
+        sgDragSrcIndex = null;
+        document.querySelectorAll('.subgallery-card.drag-over').forEach(el => el.classList.remove('drag-over'));
+        if (srcIdx == null || isNaN(dstIdx) || srcIdx === dstIdx) return;
+        const arr = collectionData[currentPortfolio];
+        if (!arr || srcIdx < 0 || srcIdx >= arr.length || dstIdx < 0 || dstIdx >= arr.length) return;
+        const [moved] = arr.splice(srcIdx, 1);
+        arr.splice(dstIdx, 0, moved);
+        // Re-render and persist the new order to KV.
+        renderSubGalleryGrid();
+        saveGalleryOrder(currentPortfolio);
+        // Suppress the spurious click that fires on drop completion so we
+        // don't accidentally navigate into the dropped gallery.
+        sgClickSuppressUntil = Date.now() + 400;
+    }
+    function sgDragEnd(e) {
+        sgDragSrcIndex = null;
+        document.querySelectorAll('.subgallery-card.dragging,.subgallery-card.drag-over')
+            .forEach(el => el.classList.remove('dragging', 'drag-over'));
+    }
+
+    // Capture-phase guard: if a click happens within ~400ms of a drop,
+    // swallow it so openSubGallery isn't triggered by the drop.
+    document.addEventListener('click', e => {
+        if (Date.now() < sgClickSuppressUntil && e.target.closest('.subgallery-card')) {
+            e.stopPropagation();
+            e.preventDefault();
+        }
+    }, true);
+
+    function saveGalleryOrder(catId) {
+        if (!catId || !collectionData[catId]) return;
+        const order = collectionData[catId].map(sg => sg.name);
+        fetch('/api/smugmug?action=save-gallery-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ categoryId: catId, order })
+        }).catch(e => console.warn('Gallery order sync failed:', e));
+    }
+
+    async function loadGalleryOrdersFromKV() {
+        try {
+            const resp = await fetch('/api/smugmug?action=list-gallery-orders');
+            if (!resp.ok) return;
+            const data = await resp.json();
+            if (!data.orders || typeof data.orders !== 'object') return;
+            // Apply saved orders: re-sort each category's array to match.
+            // Galleries not in the saved order are appended in their
+            // original positions (so newly-added galleries don't disappear).
+            Object.keys(data.orders).forEach(catId => {
+                if (!collectionData[catId]) return;
+                const order = data.orders[catId];
+                if (!Array.isArray(order)) return;
+                const byName = new Map(collectionData[catId].map(sg => [sg.name, sg]));
+                const reordered = [];
+                order.forEach(name => {
+                    if (byName.has(name)) {
+                        reordered.push(byName.get(name));
+                        byName.delete(name);
+                    }
+                });
+                // Append any galleries not in the saved order at the end.
+                byName.forEach(sg => reordered.push(sg));
+                collectionData[catId] = reordered;
+            });
+            renderPortfolioGrid();
+        } catch (e) {
+            console.warn('Gallery orders KV load failed:', e);
+        }
     }
 
     // Make the currently lightboxed photo the Browse-page cover for its
@@ -3605,6 +3722,7 @@
     loadPortfolioCoversFromKV();
     loadFeaturedFromKV();
     loadTextsFromKV();
+    loadGalleryOrdersFromKV();
     renderPortfolioGrid();
     renderHomeGrid();
 
