@@ -224,6 +224,46 @@
     .btn-secondary:hover {
         border-color: var(--caps-white)
     }/* PHOTO GRID on home */
+    /* ── HOME STATS STRIP ── */
+    .home-stats {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 24px;
+        padding: 32px;
+        background: var(--caps-dark);
+        border-top: 1px solid rgba(200, 16, 46, 0.25);
+        border-bottom: 3px solid var(--caps-red);
+        text-align: center;
+    }
+    .stat-block {
+        padding: 12px 8px;
+    }
+    .stat-number {
+        font-family: 'Oswald', sans-serif;
+        font-size: 54px;
+        font-weight: 700;
+        color: var(--caps-red);
+        line-height: 1;
+        margin-bottom: 8px;
+        letter-spacing: 1px;
+    }
+    .stat-label {
+        font-family: 'Oswald', sans-serif;
+        font-size: 12px;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        color: #888;
+    }
+    @media (max-width: 800px) {
+        .home-stats {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            padding: 22px 16px;
+        }
+        .stat-number { font-size: 38px; }
+        .stat-label { font-size: 10px; letter-spacing: 2px; }
+    }
+
     .home-intro {
         padding: 48px 32px 16px;
         background: var(--caps-navy);
@@ -2089,6 +2129,24 @@
                 </div>
             </div>
         </div>
+        <section class="home-stats" id="home-stats">
+            <div class="stat-block">
+                <div class="stat-number" id="stat-total">—</div>
+                <div class="stat-label">Items in the Vault</div>
+            </div>
+            <div class="stat-block">
+                <div class="stat-number" id="stat-jerseys">—</div>
+                <div class="stat-label">Game-Worn Jerseys</div>
+            </div>
+            <div class="stat-block">
+                <div class="stat-number" id="stat-equipment">—</div>
+                <div class="stat-label">Sticks &amp; Equipment</div>
+            </div>
+            <div class="stat-block">
+                <div class="stat-number" id="stat-cards">—</div>
+                <div class="stat-label">Cards &amp; Autographs</div>
+            </div>
+        </section>
         <section class="home-intro">
             <h2>About the Collection</h2>
             <div class="section-line"></div>
@@ -3726,8 +3784,38 @@
         passive: true
     });
 
+    // ── HOME STATS STRIP ──
+    // Walks collectionData and totals up items per category bucket.
+    // Buckets: total, jerseys (home/away/alt), sticks+equipment+pucks,
+    // cards+autographed-cards+captains-autos+autographs.
+    function renderStats() {
+        let total = 0, jerseys = 0, equip = 0, cards = 0;
+        Object.keys(collectionData).forEach(catId => {
+            const galleries = collectionData[catId];
+            if (!Array.isArray(galleries)) return;
+            const catTotal = galleries.reduce((s, sg) => s + (sg && sg.items ? sg.items.length : 0), 0);
+            total += catTotal;
+            if (catId === 'home-jerseys' || catId === 'away-jerseys' || catId === 'alt-jerseys') {
+                jerseys += catTotal;
+            } else if (catId === 'sticks' || catId === 'equipment' || catId === 'pucks') {
+                equip += catTotal;
+            } else if (catId === 'cards' || catId === 'autographed-cards' || catId === 'captains-autos' || catId === 'autographs') {
+                cards += catTotal;
+            }
+        });
+        const setStat = (id, n) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = (n || 0).toLocaleString();
+        };
+        setStat('stat-total', total);
+        setStat('stat-jerseys', jerseys);
+        setStat('stat-equipment', equip);
+        setStat('stat-cards', cards);
+    }
+
     // ── HOME PHOTOS ──
     function renderHomeGrid() {
+        renderStats();
         const grid = document.getElementById('home-photo-grid');
         const slots = [...homePhotos];
         while (slots.length < 6)
