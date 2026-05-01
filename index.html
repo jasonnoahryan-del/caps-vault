@@ -2051,11 +2051,6 @@
         .nav-search-btn span { display: none; }
     }
 
-    /* Center the 3-column bio row on the page. */
-    .player-bio-row {
-        margin: 0 auto;
-        justify-content: center;
-    }
     /* "About This …" details panel that sits to the right of the hero. */
     .player-details-text {
         font-family: 'Merriweather', serif;
@@ -2269,15 +2264,15 @@
             </div>
         </div>
         <div id="player-bio-section" class="player-bio-section" style="padding:24px 32px 0;border-bottom:1px solid rgba(200,16,46,0.2);display:none">
-            <div class="player-bio-row" style="max-width:1200px;display:flex;align-items:flex-start;gap:40px">
-                <div class="player-bio-text-col" style="flex:1.4;min-width:0">
+            <div class="player-bio-row" style="display:flex;align-items:flex-start;gap:32px">
+                <div class="player-bio-text-col" style="flex:1;min-width:0">
                     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
                         <div style="width:3px;height:20px;background:var(--caps-red);flex-shrink:0"></div>
                         <span style="font-family:'Oswald',sans-serif;font-size:15px;letter-spacing:2px;text-transform:uppercase;color:var(--caps-red)">Career with Washington Capitals</span>
                     </div>
                     <p id="player-bio-text" style="font-family:'Merriweather',serif;font-size:18px;color:#aaa;line-height:2;margin-bottom:24px"></p>
                 </div>
-                <div id="player-bio-hero-container" class="player-bio-hero-container" style="flex:1;display:none;align-items:flex-start;justify-content:center;padding-top:8px">
+                <div id="player-bio-hero-container" class="player-bio-hero-container" style="flex:2;display:none;align-items:flex-start;justify-content:center;padding-top:8px">
                     <img id="player-bio-hero-img" src="" alt="" style="width:100%;max-height:380px;object-fit:cover;border:1px solid rgba(200,16,46,0.25);border-radius:2px;box-shadow:0 4px 20px rgba(0,0,0,0.4)">
                 </div>
                 <div id="player-details-container" class="player-details-container" style="flex:1;min-width:0;display:none;flex-direction:column;padding-top:8px">
