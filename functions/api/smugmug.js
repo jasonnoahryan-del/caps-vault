@@ -129,6 +129,23 @@ export async function onRequest(context) {
       return new Response(JSON.stringify({ texts }), { headers: corsHeaders });
     }
 
+    // Save the order of categories on the Browse page. Body:
+    // { order: ["home-jerseys", "sticks", ...] }
+    if (action === 'save-portfolio-order' && request.method === 'POST') {
+      const body = await request.json();
+      const { order } = body;
+      if (!Array.isArray(order)) return new Response(JSON.stringify({ error: 'Missing order' }), { status: 400, headers: corsHeaders });
+      await env.CAPS_VAULT_KV.put('portfolioOrder', JSON.stringify(order));
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Get the saved Browse-page order. Returns { order: [id, id, ...] }
+    if (action === 'list-portfolio-order') {
+      const stored = await env.CAPS_VAULT_KV.get('portfolioOrder');
+      const order = stored ? JSON.parse(stored) : [];
+      return new Response(JSON.stringify({ order }), { headers: corsHeaders });
+    }
+
     // Save the order of sub-galleries within a category. Body:
     // { categoryId, order: ["Player Name", "Player Name", ...] }
     if (action === 'save-gallery-order' && request.method === 'POST') {
@@ -196,6 +213,7 @@ export async function onRequest(context) {
         if (key.name === 'texts') continue;
         if (key.name === 'portfolioCovers') continue;
         if (key.name === 'galleryOrders') continue;
+        if (key.name === 'portfolioOrder') continue;
         data[key.name] = await env.CAPS_VAULT_KV.get(key.name);
       }
       return new Response(JSON.stringify(data), { headers: corsHeaders });

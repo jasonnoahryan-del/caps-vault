@@ -422,6 +422,13 @@
         align-items: center
     }
 
+    .portfolio-card.dragging {
+        opacity: 0.35;
+    }
+    .portfolio-card.drag-over .portfolio-card-img {
+        border-color: var(--caps-gold);
+        box-shadow: inset 0 0 0 2px var(--caps-gold);
+    }
     .portfolio-card:hover {
         transform: translateY(-3px)
     }
@@ -2859,10 +2866,13 @@
     // ── PORTFOLIO (category) GRID ──
     function renderPortfolioGrid() {
         const grid = document.getElementById('portfolio-grid');
-        grid.innerHTML = portfolios.map(p => {
+        grid.innerHTML = portfolios.map((p, i) => {
             const total = collectionData[p.id].reduce((s, sg) => s + (sg.items ? sg.items.length : 0), 0);
             const cover = portfolioCovers[p.id] || collectionData[p.id][0]?.cover || null;
-            return `<div class="portfolio-card" onclick="openPortfolio('${p.id}')">
+            const dragAttrs = isAdmin
+                ? ` draggable="true" ondragstart="pfDragStart(event)" ondragover="pfDragOver(event)" ondrop="pfDrop(event)" ondragend="pfDragEnd(event)" ondragenter="pfDragEnter(event)" ondragleave="pfDragLeave(event)"`
+                : '';
+            return `<div class="portfolio-card" data-pf-index="${i}" onclick="openPortfolio('${p.id}')"${dragAttrs}>
       <div class="portfolio-card-img">
         ${
             cover ? `<img src="${cover}" alt="">` : `<span style="font-size:64px;opacity:0.25">${p.icon}</span>`}
@@ -3537,6 +3547,104 @@
             openSearch();
         }
     });
+
+    // ── PORTFOLIO (BROWSE PAGE) DRAG-AND-DROP REORDERING ──
+    // Admin can drag the category tiles on the Browse page to reorder
+    // them. Order is saved to KV so all visitors see it.
+    let pfDragSrcIndex = null;
+    let pfClickSuppressUntil = 0;
+
+    function pfDragStart(e) {
+        const card = e.target.closest('.portfolio-card');
+        if (!card) return;
+        pfDragSrcIndex = parseInt(card.dataset.pfIndex, 10);
+        card.classList.add('dragging');
+        try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(pfDragSrcIndex)); } catch (_) {}
+    }
+    function pfDragOver(e) {
+        if (pfDragSrcIndex == null) return;
+        e.preventDefault();
+        try { e.dataTransfer.dropEffect = 'move'; } catch (_) {}
+    }
+    function pfDragEnter(e) {
+        const card = e.target.closest('.portfolio-card');
+        if (!card) return;
+        card.classList.add('drag-over');
+    }
+    function pfDragLeave(e) {
+        const card = e.target.closest('.portfolio-card');
+        if (!card) return;
+        card.classList.remove('drag-over');
+    }
+    function pfDrop(e) {
+        e.preventDefault();
+        const targetCard = e.target.closest('.portfolio-card');
+        if (!targetCard) {
+            pfDragSrcIndex = null;
+            return;
+        }
+        const srcIdx = pfDragSrcIndex;
+        const dstIdx = parseInt(targetCard.dataset.pfIndex, 10);
+        pfDragSrcIndex = null;
+        document.querySelectorAll('.portfolio-card.drag-over').forEach(el => el.classList.remove('drag-over'));
+        if (srcIdx == null || isNaN(dstIdx) || srcIdx === dstIdx) return;
+        if (srcIdx < 0 || srcIdx >= portfolios.length || dstIdx < 0 || dstIdx >= portfolios.length) return;
+        const [moved] = portfolios.splice(srcIdx, 1);
+        portfolios.splice(dstIdx, 0, moved);
+        renderPortfolioGrid();
+        savePortfolioOrder();
+        pfClickSuppressUntil = Date.now() + 400;
+    }
+    function pfDragEnd(e) {
+        pfDragSrcIndex = null;
+        document.querySelectorAll('.portfolio-card.dragging,.portfolio-card.drag-over')
+            .forEach(el => el.classList.remove('dragging', 'drag-over'));
+    }
+
+    // Capture-phase guard: swallow the spurious click that fires on drop
+    // so we don't accidentally open the dropped category.
+    document.addEventListener('click', e => {
+        if (Date.now() < pfClickSuppressUntil && e.target.closest('.portfolio-card')) {
+            e.stopPropagation();
+            e.preventDefault();
+        }
+    }, true);
+
+    function savePortfolioOrder() {
+        const order = portfolios.map(p => p.id);
+        fetch('/api/smugmug?action=save-portfolio-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order })
+        }).catch(e => console.warn('Portfolio order sync failed:', e));
+    }
+
+    async function loadPortfolioOrderFromKV() {
+        try {
+            const resp = await fetch('/api/smugmug?action=list-portfolio-order');
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const order = data && Array.isArray(data.order) ? data.order : null;
+            if (!order || order.length === 0) return;
+            // Re-sort the portfolios array in place to match saved order.
+            // Categories not in the saved order are appended at the end
+            // (so newly-added categories don't disappear).
+            const byId = new Map(portfolios.map(p => [p.id, p]));
+            const reordered = [];
+            order.forEach(id => {
+                if (byId.has(id)) {
+                    reordered.push(byId.get(id));
+                    byId.delete(id);
+                }
+            });
+            byId.forEach(p => reordered.push(p));
+            portfolios.length = 0;
+            reordered.forEach(p => portfolios.push(p));
+            renderPortfolioGrid();
+        } catch (e) {
+            console.warn('Portfolio order KV load failed:', e);
+        }
+    }
 
     // ── SUB-GALLERY DRAG-AND-DROP REORDERING ──
     // Admin can drag tiles on the gallery list page to reorder them
@@ -4260,6 +4368,7 @@
     loadFeaturedFromKV();
     loadTextsFromKV();
     loadGalleryOrdersFromKV();
+    loadPortfolioOrderFromKV();
     renderPortfolioGrid();
     renderHomeGrid();
 
@@ -4359,6 +4468,7 @@
             renderMediaGrid && renderMediaGrid();
             renderSubGalleryGrid && renderSubGalleryGrid();
             renderHomeGrid();
+            renderPortfolioGrid();
             enableTextEditing();
             // If a player gallery is currently shown, re-render its bio so
             // the inline editor binds to the bio paragraph too.
@@ -4378,6 +4488,7 @@
         renderMediaGrid && renderMediaGrid();
         renderSubGalleryGrid && renderSubGalleryGrid();
         renderHomeGrid();
+        renderPortfolioGrid();
     }
     </script>
 
