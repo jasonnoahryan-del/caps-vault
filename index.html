@@ -2051,6 +2051,24 @@
         .nav-search-btn span { display: none; }
     }
 
+    /* Player bio hero image: side-by-side on desktop, stacks on mobile
+       with the image first so the visual lands before the text. */
+    @media (max-width: 800px) {
+        .player-bio-row {
+            flex-direction: column !important;
+            gap: 20px !important;
+        }
+        .player-bio-hero-container {
+            order: -1 !important;
+            width: 100%;
+            max-width: 480px;
+            margin: 0 auto;
+        }
+        .player-bio-hero-container img {
+            max-height: 320px !important;
+        }
+    }
+
     /* Skip the intro splash on subsequent loads in the same session.
        Set by enterSite() and read by the inline <script> below. */
     html.splash-skip .intro-splash { display: none !important; }
@@ -2226,14 +2244,17 @@
                 </div>
             </div>
         </div>
-        <div id="player-bio-section" style="padding:24px 32px 0;border-bottom:1px solid rgba(200,16,46,0.2);display:none">
-            <div style="max-width:1200px;display:flex;align-items:flex-start;gap:40px">
-                <div style="flex:1">
+        <div id="player-bio-section" class="player-bio-section" style="padding:24px 32px 0;border-bottom:1px solid rgba(200,16,46,0.2);display:none">
+            <div class="player-bio-row" style="max-width:1200px;display:flex;align-items:flex-start;gap:40px">
+                <div class="player-bio-text-col" style="flex:1.4;min-width:0">
                     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
                         <div style="width:3px;height:20px;background:var(--caps-red);flex-shrink:0"></div>
                         <span style="font-family:'Oswald',sans-serif;font-size:15px;letter-spacing:2px;text-transform:uppercase;color:var(--caps-red)">Career with Washington Capitals</span>
                     </div>
                     <p id="player-bio-text" style="font-family:'Merriweather',serif;font-size:18px;color:#aaa;line-height:2;margin-bottom:24px"></p>
+                </div>
+                <div id="player-bio-hero-container" class="player-bio-hero-container" style="flex:1;display:none;align-items:flex-start;justify-content:center;padding-top:8px">
+                    <img id="player-bio-hero-img" src="" alt="" style="width:100%;max-height:380px;object-fit:cover;border:1px solid rgba(200,16,46,0.25);border-radius:2px;box-shadow:0 4px 20px rgba(0,0,0,0.4)">
                 </div>
                 <div id="player-nameplate-container" style="flex:1;display:none;flex-direction:column;align-items:center;justify-content:center;padding-top:8px">
                     <img id="player-nameplate-img" src="" style="width:100%;border:1px solid rgba(200,16,46,0.25);border-radius:2px;box-shadow:0 4px 20px rgba(0,0,0,0.4)">
@@ -2363,6 +2384,7 @@
                 <div class="lightbox-btns">
                     <button class="lightbox-close admin-only" id="feature-btn" onclick="toggleFeatured()" style="border-color:rgba(184,150,12,0.5);color:#b8960c">★ Feature</button>
                     <button class="lightbox-close admin-only" id="browse-cover-btn" onclick="setAsBrowseCover()" style="border-color:rgba(184,150,12,0.5);color:#b8960c">⊙ Set as Browse Cover</button>
+                    <button class="lightbox-close admin-only" id="player-hero-btn" onclick="setAsPlayerHero()" style="border-color:rgba(184,150,12,0.5);color:#b8960c">⊙ Set as Player Hero</button>
                     <button class="lightbox-close" onclick="closeLightboxBtn()">✕ Close</button>
                 </div>
             </div>
@@ -3077,6 +3099,8 @@
             bioText.dataset.editId = 'bio:' + sg.name;
             if (isAdmin) markEditable(bioText);
             bioSection.style.display = 'block';
+            // Show the player hero image (KV override → cover → first item).
+            applyPlayerHero(sg);
             // Show nameplate if available
             const nameplateContainer = document.getElementById('player-nameplate-container');
             const nameplateImg = document.getElementById('player-nameplate-img');
@@ -3093,6 +3117,9 @@
             const nameplateContainer = document.getElementById('player-nameplate-container');
             if (nameplateContainer)
                 nameplateContainer.style.display = 'none';
+            const heroContainer = document.getElementById('player-bio-hero-container');
+            if (heroContainer)
+                heroContainer.style.display = 'none';
         }
 
         renderMediaGrid();
@@ -3753,6 +3780,100 @@
         }
     }
 
+    // ── PLAYER HERO IMAGE (next to bio text on each player gallery) ──
+    let playerHeroOverrides = {};
+
+    async function loadPlayerHerosFromKV() {
+        try {
+            const resp = await fetch('/api/smugmug?action=list-player-heros');
+            if (!resp.ok) return;
+            const data = await resp.json();
+            if (data && typeof data === 'object') {
+                playerHeroOverrides = data;
+                refreshCurrentPlayerHero();
+            }
+        } catch (e) {
+            console.warn('Player hero KV load failed:', e);
+        }
+    }
+
+    // Resolve the hero image URL for a given player gallery: KV override
+    // wins, falls back to the gallery's cover, then the first item.
+    function getPlayerHeroUrl(catId, sg) {
+        if (!sg) return null;
+        const key = catId + '__' + sg.name;
+        if (playerHeroOverrides[key]) return playerHeroOverrides[key];
+        if (sg.cover) return sg.cover;
+        if (sg.items && sg.items[0]) {
+            const it = sg.items[0];
+            return it.largeUrl || it.thumbUrl || it.src || null;
+        }
+        return null;
+    }
+
+    function refreshCurrentPlayerHero() {
+        const subPage = document.getElementById('page-subgallery');
+        if (!subPage || !subPage.classList.contains('active')) return;
+        if (currentPortfolio == null || currentSubGalleryIndex == null) return;
+        const sg = collectionData[currentPortfolio]?.[currentSubGalleryIndex];
+        if (sg) applyPlayerHero(sg);
+    }
+
+    function applyPlayerHero(sg) {
+        const container = document.getElementById('player-bio-hero-container');
+        const img = document.getElementById('player-bio-hero-img');
+        if (!container || !img) return;
+        // Single-gallery categories (cards/autographs) don't have a player.
+        const cat = portfolios.find(p => p.id === currentPortfolio);
+        if (cat && cat.singleGallery) {
+            container.style.display = 'none';
+            return;
+        }
+        const heroUrl = getPlayerHeroUrl(currentPortfolio, sg);
+        if (heroUrl) {
+            img.src = heroUrl;
+            img.alt = sg.name || '';
+            container.style.display = 'flex';
+        } else {
+            container.style.display = 'none';
+        }
+    }
+
+    function setAsPlayerHero() {
+        const item = currentLightboxItem;
+        if (!item || currentPortfolio == null || currentSubGalleryIndex == null) return;
+        const sg = collectionData[currentPortfolio]?.[currentSubGalleryIndex];
+        if (!sg) return;
+        const heroUrl = (item.largeUrl && item.largeUrl.startsWith('http')) ? item.largeUrl
+                      : (item.thumbUrl && item.thumbUrl.startsWith('http')) ? item.thumbUrl
+                      : (item.src && item.src.startsWith('http')) ? item.src
+                      : null;
+        if (!heroUrl) {
+            alert('Player hero must be a SmugMug image (locally uploaded photos cannot be served to other visitors).');
+            return;
+        }
+        const key = currentPortfolio + '__' + sg.name;
+        playerHeroOverrides[key] = heroUrl;
+        applyPlayerHero(sg);
+        fetch('/api/smugmug?action=save-player-hero', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key, heroUrl })
+        }).catch(e => console.warn('Player hero sync failed:', e));
+        const btn = document.getElementById('player-hero-btn');
+        if (btn) {
+            const orig = btn.textContent;
+            btn.textContent = '✓ Player Hero Set';
+            btn.style.background = '#1a7a3a';
+            btn.style.color = '#fff';
+            setTimeout(() => {
+                btn.textContent = orig;
+                btn.style.background = 'transparent';
+                btn.style.color = '#b8960c';
+            }, 1500);
+        }
+    }
+
     // Make the currently lightboxed photo the Browse-page cover for its
     // parent category. Saves to KV so all visitors see it. Only http URLs
     // are accepted because base64 uploads can't be served to other devices.
@@ -4369,6 +4490,7 @@
     loadTextsFromKV();
     loadGalleryOrdersFromKV();
     loadPortfolioOrderFromKV();
+    loadPlayerHerosFromKV();
     renderPortfolioGrid();
     renderHomeGrid();
 

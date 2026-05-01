@@ -129,6 +129,32 @@ export async function onRequest(context) {
       return new Response(JSON.stringify({ texts }), { headers: corsHeaders });
     }
 
+    // Save a per-player hero image URL (shown next to the bio text on each
+    // player's gallery page). Body: { key, heroUrl } where key is
+    // "categoryId__playerName". Pass null/empty heroUrl to clear.
+    if (action === 'save-player-hero' && request.method === 'POST') {
+      const body = await request.json();
+      const { key, heroUrl } = body;
+      if (!key) return new Response(JSON.stringify({ error: 'Missing key' }), { status: 400, headers: corsHeaders });
+      if (heroUrl) {
+        await env.CAPS_VAULT_KV.put('phero:' + key, heroUrl);
+      } else {
+        await env.CAPS_VAULT_KV.delete('phero:' + key);
+      }
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Get all saved player hero URLs as { "<catId>__<playerName>": url, ... }
+    if (action === 'list-player-heros') {
+      const list = await env.CAPS_VAULT_KV.list({ prefix: 'phero:' });
+      const data = {};
+      for (const k of list.keys) {
+        const realKey = k.name.slice('phero:'.length);
+        data[realKey] = await env.CAPS_VAULT_KV.get(k.name);
+      }
+      return new Response(JSON.stringify(data), { headers: corsHeaders });
+    }
+
     // Save the order of categories on the Browse page. Body:
     // { order: ["home-jerseys", "sticks", ...] }
     if (action === 'save-portfolio-order' && request.method === 'POST') {
@@ -209,6 +235,7 @@ export async function onRequest(context) {
       const data = {};
       for (const key of list.keys) {
         if (key.name.startsWith('cover:')) continue;
+        if (key.name.startsWith('phero:')) continue;
         if (key.name === 'featured') continue;
         if (key.name === 'texts') continue;
         if (key.name === 'portfolioCovers') continue;
