@@ -227,8 +227,8 @@
     /* ── HOME STATS STRIP ── */
     .home-stats {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 24px;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 20px;
         padding: 32px;
         background: var(--caps-dark);
         border-top: 1px solid rgba(200, 16, 46, 0.25);
@@ -2131,6 +2131,10 @@
         </div>
         <section class="home-stats" id="home-stats">
             <div class="stat-block">
+                <div class="stat-number" id="stat-photos">—</div>
+                <div class="stat-label">Total Pictures</div>
+            </div>
+            <div class="stat-block">
                 <div class="stat-number" id="stat-total">—</div>
                 <div class="stat-label">Items in the Vault</div>
             </div>
@@ -3792,10 +3796,15 @@
     //   * For single-gallery categories (cards, autographs, etc. — flagged
     //     singleGallery: true): each item in the one gallery = one piece.
     function renderStats() {
-        let total = 0, jerseys = 0, equip = 0, cards = 0;
+        let photos = 0, total = 0, jerseys = 0, equip = 0, cards = 0;
         portfolios.forEach(p => {
             const galleries = collectionData[p.id];
             if (!Array.isArray(galleries)) return;
+            // Total photos = every uploaded photo/video across every gallery.
+            galleries.forEach(sg => {
+                if (sg && Array.isArray(sg.items)) photos += sg.items.length;
+            });
+            // Physical-piece count differs by category type (see comment above).
             const count = p.singleGallery
                 ? galleries.reduce((s, sg) => s + (sg && sg.items ? sg.items.length : 0), 0)
                 : galleries.filter(sg => sg && sg.items && sg.items.length > 0).length;
@@ -3812,6 +3821,7 @@
             const el = document.getElementById(id);
             if (el) el.textContent = (n || 0).toLocaleString();
         };
+        setStat('stat-photos', photos);
         setStat('stat-total', total);
         setStat('stat-jerseys', jerseys);
         setStat('stat-equipment', equip);
