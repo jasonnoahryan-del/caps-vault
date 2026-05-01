@@ -3785,22 +3785,27 @@
     });
 
     // ── HOME STATS STRIP ──
-    // Walks collectionData and totals up items per category bucket.
-    // Buckets: total, jerseys (home/away/alt), sticks+equipment+pucks,
-    // cards+autographed-cards+captains-autos+autographs.
+    // Counts each physical piece, not photos:
+    //   * For per-player categories (jerseys, sticks, equipment, pucks):
+    //     each populated sub-gallery = one piece (a jersey is one item
+    //     even if you've shot it from 8 angles).
+    //   * For single-gallery categories (cards, autographs, etc. — flagged
+    //     singleGallery: true): each item in the one gallery = one piece.
     function renderStats() {
         let total = 0, jerseys = 0, equip = 0, cards = 0;
-        Object.keys(collectionData).forEach(catId => {
-            const galleries = collectionData[catId];
+        portfolios.forEach(p => {
+            const galleries = collectionData[p.id];
             if (!Array.isArray(galleries)) return;
-            const catTotal = galleries.reduce((s, sg) => s + (sg && sg.items ? sg.items.length : 0), 0);
-            total += catTotal;
-            if (catId === 'home-jerseys' || catId === 'away-jerseys' || catId === 'alt-jerseys') {
-                jerseys += catTotal;
-            } else if (catId === 'sticks' || catId === 'equipment' || catId === 'pucks') {
-                equip += catTotal;
-            } else if (catId === 'cards' || catId === 'autographed-cards' || catId === 'captains-autos' || catId === 'autographs') {
-                cards += catTotal;
+            const count = p.singleGallery
+                ? galleries.reduce((s, sg) => s + (sg && sg.items ? sg.items.length : 0), 0)
+                : galleries.filter(sg => sg && sg.items && sg.items.length > 0).length;
+            total += count;
+            if (p.id === 'home-jerseys' || p.id === 'away-jerseys' || p.id === 'alt-jerseys') {
+                jerseys += count;
+            } else if (p.id === 'sticks' || p.id === 'equipment' || p.id === 'pucks') {
+                equip += count;
+            } else if (p.id === 'cards' || p.id === 'autographed-cards' || p.id === 'captains-autos' || p.id === 'autographs') {
+                cards += count;
             }
         });
         const setStat = (id, n) => {
