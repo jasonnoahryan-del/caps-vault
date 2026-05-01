@@ -903,6 +903,35 @@
         text-transform: uppercase
     }
 
+    .lightbox-year {
+        font-family: 'Oswald', sans-serif;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        color: var(--caps-red);
+        margin-top: 4px;
+        margin-bottom: 8px;
+    }
+    .lightbox-notes {
+        font-family: 'Merriweather', serif;
+        font-size: 14px;
+        line-height: 1.65;
+        color: #b8bdc7;
+        margin-top: 6px;
+        max-width: 720px;
+    }
+    /* Hide empty year/notes for visitors. Admins still see the placeholder
+       (handled by the existing .admin-mode [data-edit-id]:empty::before rule). */
+    .lightbox-year:empty,
+    .lightbox-notes:empty {
+        display: none;
+    }
+    .admin-mode .lightbox-year:empty,
+    .admin-mode .lightbox-notes:empty {
+        display: block;
+    }
+
     .lightbox-meta {
         font-size: 11px;
         color: #666;
@@ -2283,9 +2312,10 @@
                 <button class="lightbox-arrow next" id="lb-next" onclick="lightboxNav(1)">&#8250;</button>
             </div>
             <div class="lightbox-info">
-                <div>
+                <div style="flex:1">
                     <div class="lightbox-title" id="lightbox-title"></div>
-                    <div class="lightbox-meta" id="lightbox-meta"></div>
+                    <div class="lightbox-year" id="lightbox-year"></div>
+                    <div class="lightbox-notes" id="lightbox-notes"></div>
                 </div>
             </div>
             <div class="lightbox-thumbs" id="lightbox-thumbs"></div>
@@ -3237,8 +3267,32 @@
         const item = items[i];
         currentLightboxItem = item;
 
-        document.getElementById('lightbox-title').textContent = item.name;
-        document.getElementById('lightbox-meta').textContent = [item.year, item.notes].filter(Boolean).join(' · ');
+        // Photo-level metadata: each photo gets a stable ID (preferring its
+        // SmugMug page URL) and three editable fields — title, year, story.
+        // Edits live in the same texts blob in KV used elsewhere on the site.
+        const photoId = item.webUri || item.largeUrl || item.src || ('idx:' + currentPortfolio + ':' + currentSubGalleryIndex + ':' + i);
+        const titleKey = 'photo-title:' + photoId;
+        const yearKey  = 'photo-year:'  + photoId;
+        const notesKey = 'photo-notes:' + photoId;
+
+        const titleEl = document.getElementById('lightbox-title');
+        const yearEl  = document.getElementById('lightbox-year');
+        const notesEl = document.getElementById('lightbox-notes');
+
+        // Override beats default; default falls back to the original item field.
+        titleEl.textContent = textOverrides[titleKey] != null ? textOverrides[titleKey] : (item.name || '');
+        yearEl.textContent  = textOverrides[yearKey]  != null ? textOverrides[yearKey]  : (item.year || '');
+        notesEl.textContent = textOverrides[notesKey] != null ? textOverrides[notesKey] : (item.notes || '');
+
+        titleEl.dataset.editId = titleKey;
+        yearEl.dataset.editId  = yearKey;
+        notesEl.dataset.editId = notesKey;
+        if (isAdmin) {
+            markEditable(titleEl);
+            markEditable(yearEl);
+            markEditable(notesEl);
+        }
+
         document.getElementById('lightbox-counter').textContent = `${i + 1} / ${items.length}`;
 
         const img = document.getElementById('lightbox-img');
