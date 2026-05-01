@@ -2051,9 +2051,28 @@
         .nav-search-btn span { display: none; }
     }
 
-    /* Player bio hero image: side-by-side on desktop, stacks on mobile
+    /* Center the 3-column bio row on the page. */
+    .player-bio-row {
+        margin: 0 auto;
+        justify-content: center;
+    }
+    /* "About This …" details panel that sits to the right of the hero. */
+    .player-details-text {
+        font-family: 'Merriweather', serif;
+        font-size: 15px;
+        line-height: 1.85;
+        color: #cdd1d8;
+        padding: 18px 22px;
+        background: rgba(4, 30, 66, 0.55);
+        border-left: 3px solid var(--caps-red);
+        border-radius: 2px;
+        min-height: 120px;
+        white-space: pre-wrap;
+    }
+
+    /* Player bio + hero + details: side-by-side on desktop, stacks on mobile
        with the image first so the visual lands before the text. */
-    @media (max-width: 800px) {
+    @media (max-width: 900px) {
         .player-bio-row {
             flex-direction: column !important;
             gap: 20px !important;
@@ -2066,6 +2085,11 @@
         }
         .player-bio-hero-container img {
             max-height: 320px !important;
+        }
+        .player-details-container {
+            width: 100%;
+            max-width: 720px;
+            margin: 0 auto;
         }
     }
 
@@ -2255,6 +2279,13 @@
                 </div>
                 <div id="player-bio-hero-container" class="player-bio-hero-container" style="flex:1;display:none;align-items:flex-start;justify-content:center;padding-top:8px">
                     <img id="player-bio-hero-img" src="" alt="" style="width:100%;max-height:380px;object-fit:cover;border:1px solid rgba(200,16,46,0.25);border-radius:2px;box-shadow:0 4px 20px rgba(0,0,0,0.4)">
+                </div>
+                <div id="player-details-container" class="player-details-container" style="flex:1;min-width:0;display:none;flex-direction:column;padding-top:8px">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+                        <div style="width:3px;height:20px;background:var(--caps-red);flex-shrink:0"></div>
+                        <span id="player-details-title" style="font-family:'Oswald',sans-serif;font-size:15px;letter-spacing:2px;text-transform:uppercase;color:var(--caps-red)">About This Item</span>
+                    </div>
+                    <div id="player-details-text" class="player-details-text"></div>
                 </div>
                 <div id="player-nameplate-container" style="flex:1;display:none;flex-direction:column;align-items:center;justify-content:center;padding-top:8px">
                     <img id="player-nameplate-img" src="" style="width:100%;border:1px solid rgba(200,16,46,0.25);border-radius:2px;box-shadow:0 4px 20px rgba(0,0,0,0.4)">
@@ -3101,6 +3132,8 @@
             bioSection.style.display = 'block';
             // Show the player hero image (KV override → cover → first item).
             applyPlayerHero(sg);
+            // Show the "About This Jersey/Stick/etc." details panel.
+            applyPlayerDetails(sg);
             // Show nameplate if available
             const nameplateContainer = document.getElementById('player-nameplate-container');
             const nameplateImg = document.getElementById('player-nameplate-img');
@@ -3120,6 +3153,9 @@
             const heroContainer = document.getElementById('player-bio-hero-container');
             if (heroContainer)
                 heroContainer.style.display = 'none';
+            const detailsContainer = document.getElementById('player-details-container');
+            if (detailsContainer)
+                detailsContainer.style.display = 'none';
         }
 
         renderMediaGrid();
@@ -3777,6 +3813,44 @@
             renderPortfolioGrid();
         } catch (e) {
             console.warn('Gallery orders KV load failed:', e);
+        }
+    }
+
+    // ── PER-PLAYER "ABOUT THIS ..." DETAILS PANEL ──
+    // Title text varies by category so it reads naturally.
+    function getDetailsTitle(catId) {
+        if (!catId) return 'About This Item';
+        if (catId.indexOf('jerseys') !== -1) return 'About This Jersey';
+        if (catId === 'sticks') return 'About This Stick';
+        if (catId === 'pucks') return 'About This Puck';
+        if (catId === 'equipment') return 'About This Item';
+        return 'About This Item';
+    }
+
+    function applyPlayerDetails(sg) {
+        const container = document.getElementById('player-details-container');
+        const titleEl = document.getElementById('player-details-title');
+        const textEl  = document.getElementById('player-details-text');
+        if (!container || !textEl || !titleEl) return;
+        // Single-gallery categories don't have a "player" — hide the panel.
+        const cat = portfolios.find(p => p.id === currentPortfolio);
+        if (cat && cat.singleGallery) {
+            container.style.display = 'none';
+            return;
+        }
+        titleEl.textContent = getDetailsTitle(currentPortfolio);
+        // Inline-editable per-player. Key includes catId in case the same
+        // player name appears in multiple categories (jerseys + sticks etc).
+        const key = 'pdetails:' + currentPortfolio + '__' + sg.name;
+        textEl.dataset.editId = key;
+        const stored = textOverrides[key];
+        textEl.textContent = stored != null ? stored : '';
+        if (isAdmin) markEditable(textEl);
+        // Show the panel for admins always; for visitors only when there's content.
+        if (isAdmin || (stored && stored.trim().length > 0)) {
+            container.style.display = 'flex';
+        } else {
+            container.style.display = 'none';
         }
     }
 
