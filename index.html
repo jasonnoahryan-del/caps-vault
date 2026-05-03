@@ -2356,8 +2356,14 @@
                 <p data-edit-id="about-p2">From game-worn jerseys to signed pucks, from rare trading cards to game-used sticks, this collection represents a lifelong passion for the Washington Capitals and the sport of hockey.</p>
                 <p data-edit-id="about-p3">Each item comes with its own story — where it was worn, who used it, and what moment in Capitals history it represents. The collection is a living archive of the franchise's greatest moments and players.</p>
                 <div style="margin-top:36px;border-top:1px solid rgba(200,16,46,0.3);padding-top:32px">
-                    <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border:1px solid rgba(200,16,46,0.25)">
-                        <iframe src="https://www.youtube.com/embed/T9aZpF9M6pI" title="About the Collection" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%"></iframe>
+                    <!-- Click-to-play YouTube wrapper. Shows the warehouse-
+                         poster image until the user clicks; then the iframe
+                         loads with autoplay=1. Faster initial page load. -->
+                    <div id="about-video-wrap" style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border:1px solid rgba(200,16,46,0.25);cursor:pointer" onclick="loadAboutVideo(this)">
+                        <img src="/images/warehouse-poster.jpg" alt="Tales From The Warehouse — Collector Profile featuring Jason Gizzarelli" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover">
+                        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:80px;height:80px;background:rgba(200,16,46,0.92);border-radius:50%;display:flex;align-items:center;justify-content:center;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,0.5);transition:transform 0.2s ease">
+                            <div style="width:0;height:0;border-style:solid;border-width:16px 0 16px 26px;border-color:transparent transparent transparent #fff;margin-left:6px"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2917,6 +2923,14 @@
         // directly in the HTML via /images/cup1..4.jpg).
         const splashLogo = document.getElementById('splash-logo');
         if (splashLogo) splashLogo.src = src;
+    }
+
+    // Click handler for the About-page video poster. Swaps the poster
+    // image for the actual YouTube iframe (with autoplay) on first click.
+    function loadAboutVideo(wrap) {
+        if (!wrap || wrap.dataset.loaded === '1') return;
+        wrap.dataset.loaded = '1';
+        wrap.innerHTML = '<iframe src="https://www.youtube.com/embed/T9aZpF9M6pI?autoplay=1" title="About the Collection" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%"></iframe>';
     }
 
     // Splash dismissal — plays the Walton Cup call and fades out the
