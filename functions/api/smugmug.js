@@ -129,6 +129,33 @@ export async function onRequest(context) {
       return new Response(JSON.stringify({ texts }), { headers: corsHeaders });
     }
 
+    // Save the object-position for a player's hero image, so admin-chosen
+    // crops show the same way for every visitor.
+    // Body: { key, position } where position is a CSS object-position string
+    // like "50% 30%". Pass empty/null position to clear.
+    if (action === 'save-player-hero-pos' && request.method === 'POST') {
+      const body = await request.json();
+      const { key, position } = body;
+      if (!key) return new Response(JSON.stringify({ error: 'Missing key' }), { status: 400, headers: corsHeaders });
+      if (position) {
+        await env.CAPS_VAULT_KV.put('pheropos:' + key, position);
+      } else {
+        await env.CAPS_VAULT_KV.delete('pheropos:' + key);
+      }
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Get all saved hero-image positions as { "<catId>__<player>": pos }
+    if (action === 'list-player-hero-pos') {
+      const list = await env.CAPS_VAULT_KV.list({ prefix: 'pheropos:' });
+      const data = {};
+      for (const k of list.keys) {
+        const realKey = k.name.slice('pheropos:'.length);
+        data[realKey] = await env.CAPS_VAULT_KV.get(k.name);
+      }
+      return new Response(JSON.stringify(data), { headers: corsHeaders });
+    }
+
     // Save a per-player hero image URL (shown next to the bio text on each
     // player's gallery page). Body: { key, heroUrl } where key is
     // "categoryId__playerName". Pass null/empty heroUrl to clear.
@@ -150,6 +177,31 @@ export async function onRequest(context) {
       const data = {};
       for (const k of list.keys) {
         const realKey = k.name.slice('phero:'.length);
+        data[realKey] = await env.CAPS_VAULT_KV.get(k.name);
+      }
+      return new Response(JSON.stringify(data), { headers: corsHeaders });
+    }
+
+    // Save the object-position (CSS) for a player hero image.
+    // Body: { key, position } where position is e.g. "center 30%" or "50% 25%".
+    if (action === 'save-player-hero-pos' && request.method === 'POST') {
+      const body = await request.json();
+      const { key, position } = body;
+      if (!key) return new Response(JSON.stringify({ error: 'Missing key' }), { status: 400, headers: corsHeaders });
+      if (position) {
+        await env.CAPS_VAULT_KV.put('pheropos:' + key, position);
+      } else {
+        await env.CAPS_VAULT_KV.delete('pheropos:' + key);
+      }
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Get all saved player hero positions as { key: "center 30%", ... }
+    if (action === 'list-player-hero-positions') {
+      const list = await env.CAPS_VAULT_KV.list({ prefix: 'pheropos:' });
+      const data = {};
+      for (const k of list.keys) {
+        const realKey = k.name.slice('pheropos:'.length);
         data[realKey] = await env.CAPS_VAULT_KV.get(k.name);
       }
       return new Response(JSON.stringify(data), { headers: corsHeaders });
@@ -236,6 +288,7 @@ export async function onRequest(context) {
       for (const key of list.keys) {
         if (key.name.startsWith('cover:')) continue;
         if (key.name.startsWith('phero:')) continue;
+        if (key.name.startsWith('pheropos:')) continue;
         if (key.name === 'featured') continue;
         if (key.name === 'texts') continue;
         if (key.name === 'portfolioCovers') continue;

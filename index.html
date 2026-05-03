@@ -4047,16 +4047,23 @@
 
     // ── PLAYER HERO IMAGE (next to bio text on each player gallery) ──
     let playerHeroOverrides = {};
+    let playerHeroPositions = {}; // catId__player → CSS object-position string
 
     async function loadPlayerHerosFromKV() {
         try {
-            const resp = await fetch('/api/smugmug?action=list-player-heros');
-            if (!resp.ok) return;
-            const data = await resp.json();
-            if (data && typeof data === 'object') {
-                playerHeroOverrides = data;
-                refreshCurrentPlayerHero();
+            const [heroResp, posResp] = await Promise.all([
+                fetch('/api/smugmug?action=list-player-heros'),
+                fetch('/api/smugmug?action=list-player-hero-positions')
+            ]);
+            if (heroResp && heroResp.ok) {
+                const data = await heroResp.json();
+                if (data && typeof data === 'object') playerHeroOverrides = data;
             }
+            if (posResp && posResp.ok) {
+                const data = await posResp.json();
+                if (data && typeof data === 'object') playerHeroPositions = data;
+            }
+            refreshCurrentPlayerHero();
         } catch (e) {
             console.warn('Player hero KV load failed:', e);
         }
@@ -4098,10 +4105,90 @@
         if (heroUrl) {
             img.src = heroUrl;
             img.alt = sg.name || '';
+            // Apply saved object-position (drag-to-position) if present.
+            const posKey = currentPortfolio + '__' + sg.name;
+            img.style.objectPosition = playerHeroPositions[posKey] || 'center top';
             container.style.display = 'flex';
+            // Wire up drag-to-reposition for admins (idempotent).
+            setupHeroDrag(img, posKey);
+            // Visual cue that the image is repositionable when admin.
+            img.style.cursor = isAdmin ? 'grab' : '';
+            img.draggable = false; // prevent native drag of image
+            container.title = isAdmin ? 'Drag to reposition the photo within the frame' : '';
         } else {
             container.style.display = 'none';
         }
+    }
+
+    // SmugMug-style drag-to-reposition. When admin clicks-and-drags on the
+    // hero image, we adjust object-position (X% Y%) live, then save to KV
+    // on release. Also supports touch on tablets/phones.
+    function setupHeroDrag(img, posKey) {
+        if (!img || img.dataset.dragBound === '1') {
+            // Re-bind would create double handlers; just refresh the key.
+            if (img) img.dataset.dragKey = posKey;
+            return;
+        }
+        img.dataset.dragBound = '1';
+        img.dataset.dragKey = posKey;
+        let dragging = false, startX = 0, startY = 0, startPx = 50, startPy = 50;
+        const parsePos = () => {
+            const pos = (img.style.objectPosition || 'center top').toLowerCase();
+            const parts = pos.split(/\s+/);
+            const toPct = (v) => {
+                if (v === 'center') return 50;
+                if (v === 'left' || v === 'top') return 0;
+                if (v === 'right' || v === 'bottom') return 100;
+                const m = parseFloat(v);
+                return isNaN(m) ? 50 : m;
+            };
+            return { x: toPct(parts[0] || 'center'), y: toPct(parts[1] || 'center') };
+        };
+        const begin = (cx, cy) => {
+            if (!isAdmin) return;
+            dragging = true;
+            startX = cx; startY = cy;
+            const cur = parsePos();
+            startPx = cur.x; startPy = cur.y;
+            img.style.cursor = 'grabbing';
+            img.style.userSelect = 'none';
+        };
+        const move = (cx, cy) => {
+            if (!dragging) return;
+            const w = img.clientWidth || 1;
+            const h = img.clientHeight || 1;
+            // 1px of drag = ~1% of position move (inverted because moving the
+            // image down should reveal lower portions = increase Y%).
+            const dx = ((cx - startX) / w) * 100 * -1;
+            const dy = ((cy - startY) / h) * 100 * -1;
+            const px = Math.max(0, Math.min(100, startPx + dx));
+            const py = Math.max(0, Math.min(100, startPy + dy));
+            img.style.objectPosition = px.toFixed(1) + '% ' + py.toFixed(1) + '%';
+        };
+        const end = () => {
+            if (!dragging) return;
+            dragging = false;
+            img.style.cursor = isAdmin ? 'grab' : '';
+            img.style.userSelect = '';
+            const finalPos = img.style.objectPosition;
+            const key = img.dataset.dragKey;
+            if (key) {
+                playerHeroPositions[key] = finalPos;
+                fetch('/api/smugmug?action=save-player-hero-pos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key, position: finalPos })
+                }).catch(e => console.warn('Hero position sync failed:', e));
+            }
+        };
+        // Mouse
+        img.addEventListener('mousedown', e => { if (!isAdmin) return; e.preventDefault(); begin(e.clientX, e.clientY); });
+        document.addEventListener('mousemove', e => { if (dragging) move(e.clientX, e.clientY); });
+        document.addEventListener('mouseup', end);
+        // Touch
+        img.addEventListener('touchstart', e => { if (!isAdmin || !e.touches[0]) return; const t = e.touches[0]; begin(t.clientX, t.clientY); }, { passive: true });
+        document.addEventListener('touchmove', e => { if (dragging && e.touches[0]) { move(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); } }, { passive: false });
+        document.addEventListener('touchend', end);
     }
 
     function setAsPlayerHero() {
