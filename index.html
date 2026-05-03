@@ -2310,6 +2310,16 @@
         <div class="gallery-header">
             <h1 id="gallery-title"></h1>
         </div>
+        <!-- Category list intro: shown above the sub-gallery list for
+             non-single-gallery categories (sticks, pucks, etc.). Editable
+             title and body, both auto-save to KV. -->
+        <section id="category-list-intro" class="category-intro" style="display:none">
+            <div class="category-intro-inner">
+                <h2 id="category-list-intro-title">About</h2>
+                <div class="section-line"></div>
+                <div id="category-list-intro-text" class="category-intro-text"></div>
+            </div>
+        </section>
         <div class="subgallery-grid" id="subgallery-grid"></div>
     </div>
 
@@ -3065,6 +3075,9 @@
         document.getElementById('gallery-title').textContent = name;
         document.getElementById('gallery-breadcrumb-name').textContent = name;
         renderSubGalleryGrid();
+        // Populate the category intro on the sub-gallery list page (used by
+        // non-single-gallery categories like Sticks, Pucks, Jerseys, etc.).
+        applyCategoryIntro('category-list-intro');
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         document.getElementById('page-gallery').classList.add('active');
         document.querySelectorAll('.nav-link').forEach(b => b.classList.remove('active'));
@@ -3210,9 +3223,9 @@
         document.getElementById('subgallery-title').textContent = sg.name;
         document.getElementById('sub-breadcrumb-cat').textContent = currentPortfolioName;
         document.getElementById('sub-breadcrumb-name').textContent = sg.name;
-        // Show/hide and populate the category intro (only on single-gallery
-        // categories like Captains Autographs, Cards, etc.).
-        applyCategoryIntro();
+        // Populate the category intro on the gallery view (used by
+        // single-gallery categories like Captains Autographs, Cards, etc.).
+        applyCategoryIntro('category-intro');
 
         // Show hero banner if available, otherwise show standard bio section
         const bioSection = document.getElementById('player-bio-section');
@@ -3927,44 +3940,67 @@
         }
     }
 
-    // ── CATEGORY INTRO TEXT (single-gallery categories) ──
-    // Default seed text for each single-gallery category. Override via
-    // the inline editor saves to KV under cat-intro:<categoryId>.
+    // ── CATEGORY INTRO TEXT ──
+    // Default seed body / title text per category. Both title and body are
+    // editable inline by admin; overrides save to KV under
+    // cat-intro:<categoryId> and cat-intro-title:<categoryId>.
     const categoryIntroDefaults = {
         'captains-autos': "In the NHL, the captain wears the 'C' on his jersey and serves as the team's leader on and off the ice. The role carries deep meaning — captains represent their teammates to officials, set the tone in the locker room, and embody the franchise's identity. Being named captain is one of the highest honors in hockey, often the defining moment of a player's career.\n\nThe Washington Capitals have had only a handful of captains over the franchise's history, each leaving his own mark on the team's story. The autographs collected here belong to the men who wore the 'C' for Washington — the leaders who guided the team through both lean years and championship glory.",
+        'sticks': "The hockey stick has changed dramatically since the NHL's earliest days. Originally crafted entirely from solid wood — typically ash or hickory — sticks were heavy, prone to breaking, and had simple straight blades. The 1960s introduced laminated wood construction, while the 1970s saw the rise of curved blades pioneered by players like Stan Mikita and Bobby Hull, transforming how players could shoot and stickhandle.\n\nThe biggest revolution came in the 1990s and 2000s with composite materials. Aluminum shafts gave way to carbon fiber, eventually leading to the one-piece composite sticks that dominate today's game. Modern NHL sticks are lighter, more powerful, and engineered with custom flex profiles, kick points, and blade patterns tailored to each player's style. Each stick in this collection represents a piece of that evolution — and the men who used them.",
+        'pucks': "The hockey puck has a surprisingly rich history. Early pucks in the late 1800s were carved from frozen cow dung or sliced from rubber balls. The first official rubber pucks emerged in the 1880s, and the dimensions — three inches across, one inch thick, six ounces — were standardized in the early 1900s and remain unchanged to this day.\n\nFor decades, plain black rubber pucks were the standard. The NHL has introduced commemorative pucks for milestones, special games, and championships, and during the 1996–98 seasons experimented with the 'FoxTrax' glowing puck for television viewers. Every NHL game today uses pucks frozen before play to reduce bouncing — and each game-used puck carries with it the story of the goal, save, or moment that made it memorable. The pucks in this collection represent specific moments in Capitals history.",
         'cards': '',
         'autographed-cards': '',
         'autographs': '',
-        'more': ''
+        'more': '',
+        'home-jerseys': '',
+        'away-jerseys': '',
+        'alt-jerseys': '',
+        'equipment': ''
     };
     const categoryIntroTitles = {
         'captains-autos': 'About Captains in the NHL',
+        'sticks': 'The Evolution of the Hockey Stick',
+        'pucks': 'The Evolution of the Hockey Puck',
         'cards': 'About These Cards',
         'autographed-cards': 'About These Cards',
         'autographs': 'About These Autographs',
-        'more': 'About'
+        'more': 'About',
+        'home-jerseys': 'About Home Jerseys',
+        'away-jerseys': 'About Away Jerseys',
+        'alt-jerseys': 'About Alternate Jerseys',
+        'equipment': 'About These Pieces'
     };
 
-    function applyCategoryIntro() {
-        const sec   = document.getElementById('category-intro');
-        const title = document.getElementById('category-intro-title');
-        const text  = document.getElementById('category-intro-text');
+    // Populate the category-intro section identified by `prefix` (one of
+    // 'category-intro' or 'category-list-intro') for the current portfolio.
+    function applyCategoryIntro(prefix) {
+        const sec   = document.getElementById(prefix);
+        const title = document.getElementById(prefix + '-title');
+        const text  = document.getElementById(prefix + '-text');
         if (!sec || !title || !text) return;
         const cat = portfolios.find(p => p.id === currentPortfolio);
-        if (!cat || !cat.singleGallery) {
+        if (!cat) {
             sec.style.display = 'none';
             return;
         }
-        const key = 'cat-intro:' + currentPortfolio;
-        const override = textOverrides[key];
-        const seed = categoryIntroDefaults[currentPortfolio] || '';
-        const body = override != null ? override : seed;
-        title.textContent = categoryIntroTitles[currentPortfolio] || 'About';
-        text.dataset.editId = key;
-        text.textContent = body;
-        if (isAdmin) markEditable(text);
+        const titleKey = 'cat-intro-title:' + currentPortfolio;
+        const bodyKey  = 'cat-intro:'        + currentPortfolio;
+        const titleOverride = textOverrides[titleKey];
+        const bodyOverride  = textOverrides[bodyKey];
+        const titleSeed = categoryIntroTitles[currentPortfolio] || 'About';
+        const bodySeed  = categoryIntroDefaults[currentPortfolio] || '';
+        const titleText = titleOverride != null ? titleOverride : titleSeed;
+        const bodyText  = bodyOverride  != null ? bodyOverride  : bodySeed;
+        title.dataset.editId = titleKey;
+        title.textContent = titleText;
+        text.dataset.editId = bodyKey;
+        text.textContent = bodyText;
+        if (isAdmin) {
+            markEditable(title);
+            markEditable(text);
+        }
         // Show for everyone if there's content; admins always (for editing).
-        if (isAdmin || (body && body.trim().length > 0)) {
+        if (isAdmin || (bodyText && bodyText.trim().length > 0)) {
             sec.style.display = 'block';
         } else {
             sec.style.display = 'none';
