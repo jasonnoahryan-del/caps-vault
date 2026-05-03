@@ -2088,6 +2088,42 @@
         }
     }
 
+    /* ── ABOUT PAGE COLLAGE ──
+       CSS columns for a true Pinterest-style masonry. Photos of any
+       aspect ratio cascade and tile without gaps. Hover lifts/brightens. */
+    .about-collage {
+        column-count: 4;
+        column-gap: 8px;
+        padding: 8px;
+        background: var(--caps-dark);
+        border-bottom: 3px solid var(--caps-red);
+    }
+    .about-collage img {
+        width: 100%;
+        height: auto;
+        display: block;
+        margin-bottom: 8px;
+        break-inside: avoid;
+        border-radius: 2px;
+        border: 1px solid rgba(255, 255, 255, 0.04);
+        transition: transform 0.25s ease, filter 0.25s ease, box-shadow 0.25s ease;
+        cursor: pointer;
+    }
+    .about-collage img:hover {
+        transform: translateY(-3px);
+        filter: brightness(1.08);
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+    }
+    @media (max-width: 1100px) {
+        .about-collage { column-count: 3; }
+    }
+    @media (max-width: 700px) {
+        .about-collage { column-count: 2; }
+    }
+    @media (max-width: 400px) {
+        .about-collage { column-count: 1; }
+    }
+
     /* Skip the intro splash on subsequent loads in the same session.
        Set by enterSite() and read by the inline <script> below. */
     html.splash-skip .intro-splash { display: none !important; }
@@ -2292,13 +2328,29 @@
 
     <!-- ABOUT PAGE -->
     <div id="page-about" class="page">
-        <div style="position:relative;display:flex;min-height:600px;background:var(--caps-dark)">
 
-            <!-- Left + right hero placeholder slots — drop personal photos
-                 into /images/ and set the background-image style here when
-                 ready (e.g. background-image:url('/images/about-left.jpg')). -->
-            <div id="about-bg-left" style="position:absolute;left:0;top:0;bottom:0;width:28%;background-size:cover;background-position:center top;mask-image:linear-gradient(to right, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.4) 60%, transparent 100%);-webkit-mask-image:linear-gradient(to right, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.4) 60%, transparent 100%)"></div>
-            <div id="about-bg-right" style="position:absolute;right:0;top:0;bottom:0;width:28%;background-size:cover;background-position:center top;mask-image:linear-gradient(to left, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.4) 60%, transparent 100%);-webkit-mask-image:linear-gradient(to left, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.4) 60%, transparent 100%)"></div>
+        <!-- Personal photo collage at the top of the About page. Pinterest-
+             style masonry: photos cascade naturally regardless of aspect
+             ratio. 4 cols on wide screens, collapses to 3 / 2 / 1. -->
+        <section class="about-collage">
+            <img src="/images/about-1.jpg" alt="">
+            <img src="/images/about-2.jpg" alt="">
+            <img src="/images/about-3.jpg" alt="">
+            <img src="/images/about-4.jpg" alt="">
+            <img src="/images/about-5.jpg" alt="">
+            <img src="/images/about-6.jpg" alt="">
+            <img src="/images/about-7.jpg" alt="">
+            <img src="/images/about-8.jpg" alt="">
+            <img src="/images/about-9.jpg" alt="">
+            <img src="/images/about-10.jpg" alt="">
+            <img src="/images/about-11.jpg" alt="">
+            <img src="/images/about-12.jpg" alt="">
+            <img src="/images/about-13.jpg" alt="">
+            <img src="/images/about-14.jpg" alt="">
+            <img src="/images/about-15.jpg" alt="">
+        </section>
+
+        <div style="position:relative;display:flex;min-height:400px;background:var(--caps-dark)">
             <div class="content-page" style="position:relative;z-index:2">
                 <h1>About the Collection</h1>
                 <div class="red-line"></div>
