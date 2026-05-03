@@ -4544,30 +4544,37 @@
             Object.keys(saveData).forEach(catId => {
                 if (!collectionData[catId])
                     return;
-                saveData[catId].forEach((sgData, i) => {
-                    if (collectionData[catId][i]) {
-                        // Restore smugmug-loaded items
-                        const restoredItems = sgData.items.filter(item => item.src !== '__local__');
-                        if (restoredItems.length > 0) {
-                            collectionData[catId][i].items = restoredItems;
-                        }
-                        // Bug fix: restore the user's chosen cover. Prefer a
-                        // saved URL, otherwise rebuild it from the stored
-                        // coverIndex (works even when the original cover URL
-                        // was a non-persisted base64 data: URL).
-                        if (sgData.cover && sgData.cover !== '__embedded__') {
-                            collectionData[catId][i].cover = sgData.cover;
-                        } else if (sgData.coverIndex != null) {
-                            collectionData[catId][i]._pendingCoverIndex = sgData.coverIndex;
-                            const items = collectionData[catId][i].items;
-                            const it = items && items[sgData.coverIndex];
-                            if (it) {
-                                collectionData[catId][i].cover = it.largeUrl || it.thumbUrl || it.src || collectionData[catId][i].cover;
-                            }
-                        }
-                        if (sgData.smugmugUrl)
-                            collectionData[catId][i].smugmugUrl = sgData.smugmugUrl;
+                saveData[catId].forEach((sgData) => {
+                    // Match by NAME (not index) so admin-created galleries
+                    // beyond the hardcoded list survive a refresh. If no
+                    // existing entry matches, push the saved gallery onto
+                    // the list as a new entry.
+                    let target = collectionData[catId].find(sg => sg && sg.name === sgData.name);
+                    if (!target) {
+                        target = { name: sgData.name, desc: sgData.desc || '', cover: null, items: [] };
+                        collectionData[catId].push(target);
                     }
+                    // Restore smugmug-loaded items
+                    const restoredItems = sgData.items.filter(item => item.src !== '__local__');
+                    if (restoredItems.length > 0) {
+                        target.items = restoredItems;
+                    }
+                    // Bug fix: restore the user's chosen cover. Prefer a
+                    // saved URL, otherwise rebuild it from the stored
+                    // coverIndex (works even when the original cover URL
+                    // was a non-persisted base64 data: URL).
+                    if (sgData.cover && sgData.cover !== '__embedded__') {
+                        target.cover = sgData.cover;
+                    } else if (sgData.coverIndex != null) {
+                        target._pendingCoverIndex = sgData.coverIndex;
+                        const items = target.items;
+                        const it = items && items[sgData.coverIndex];
+                        if (it) {
+                            target.cover = it.largeUrl || it.thumbUrl || it.src || target.cover;
+                        }
+                    }
+                    if (sgData.smugmugUrl)
+                        target.smugmugUrl = sgData.smugmugUrl;
                 });
             });
             const savedHome = localStorage.getItem('capsVaultHomePhotos');
@@ -4593,9 +4600,13 @@
 
                 if (!collectionData[catId])
                     continue;
-                const sgIndex = collectionData[catId].findIndex(sg => sg.name === playerName);
-                if (sgIndex === -1)
-                    continue;
+                let sgIndex = collectionData[catId].findIndex(sg => sg.name === playerName);
+                if (sgIndex === -1) {
+                    // KV has an album for a gallery the admin created beyond
+                    // the hardcoded list — push it so visitors see it too.
+                    collectionData[catId].push({ name: playerName, desc: '', cover: null, items: [] });
+                    sgIndex = collectionData[catId].length - 1;
+                }
 
                 const sg = collectionData[catId][sgIndex];
                 sg.smugmugUrl = albumUrl;
