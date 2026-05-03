@@ -2088,6 +2088,37 @@
         }
     }
 
+    /* ── CATEGORY INTRO (shown on single-gallery categories) ── */
+    .category-intro {
+        padding: 32px 32px 8px;
+        background: var(--caps-dark);
+        border-bottom: 1px solid rgba(200, 16, 46, 0.25);
+    }
+    .category-intro-inner {
+        max-width: 980px;
+        margin: 0 auto;
+    }
+    .category-intro h2 {
+        font-family: 'Oswald', sans-serif;
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        color: var(--caps-red);
+        margin-bottom: 6px;
+    }
+    .category-intro-text {
+        font-family: 'Merriweather', serif;
+        font-size: 17px;
+        line-height: 1.85;
+        color: #cdd1d8;
+        margin-top: 14px;
+    }
+    @media (max-width: 700px) {
+        .category-intro { padding: 24px 18px 4px; }
+        .category-intro-text { font-size: 15px; line-height: 1.7; }
+    }
+
     /* ── ABOUT PAGE LAYOUT (text in middle, photos either side) ── */
     .about-layout {
         display: grid;
@@ -2310,6 +2341,16 @@
                 </div>
             </div>
         </div>
+        <!-- Category intro: shown on single-gallery categories (Captains
+             Autographs, Cards, Autographs, etc.) above the photo grid.
+             Editable inline by admin; pre-filled per category. -->
+        <section id="category-intro" class="category-intro" style="display:none">
+            <div class="category-intro-inner">
+                <h2 id="category-intro-title">About</h2>
+                <div class="section-line"></div>
+                <div id="category-intro-text" class="category-intro-text"></div>
+            </div>
+        </section>
         <div id="player-bio-section" class="player-bio-section" style="padding:24px 32px 0;border-bottom:1px solid rgba(200,16,46,0.2);display:none">
             <div class="player-bio-row" style="display:flex;align-items:flex-start;gap:32px">
                 <div class="player-bio-text-col" style="flex:3;min-width:0">
@@ -2755,7 +2796,7 @@
     },
     {
         id: 'captains-autos',
-        name: "Captain's Autographs",
+        name: 'Captains Autographs',
         icon: '🅲',
         desc: 'Signed items from Caps captains',
         singleGallery: true
@@ -3169,6 +3210,9 @@
         document.getElementById('subgallery-title').textContent = sg.name;
         document.getElementById('sub-breadcrumb-cat').textContent = currentPortfolioName;
         document.getElementById('sub-breadcrumb-name').textContent = sg.name;
+        // Show/hide and populate the category intro (only on single-gallery
+        // categories like Captains Autographs, Cards, etc.).
+        applyCategoryIntro();
 
         // Show hero banner if available, otherwise show standard bio section
         const bioSection = document.getElementById('player-bio-section');
@@ -3880,6 +3924,50 @@
             renderPortfolioGrid();
         } catch (e) {
             console.warn('Gallery orders KV load failed:', e);
+        }
+    }
+
+    // ── CATEGORY INTRO TEXT (single-gallery categories) ──
+    // Default seed text for each single-gallery category. Override via
+    // the inline editor saves to KV under cat-intro:<categoryId>.
+    const categoryIntroDefaults = {
+        'captains-autos': "In the NHL, the captain wears the 'C' on his jersey and serves as the team's leader on and off the ice. The role carries deep meaning — captains represent their teammates to officials, set the tone in the locker room, and embody the franchise's identity. Being named captain is one of the highest honors in hockey, often the defining moment of a player's career.\n\nThe Washington Capitals have had only a handful of captains over the franchise's history, each leaving his own mark on the team's story. The autographs collected here belong to the men who wore the 'C' for Washington — the leaders who guided the team through both lean years and championship glory.",
+        'cards': '',
+        'autographed-cards': '',
+        'autographs': '',
+        'more': ''
+    };
+    const categoryIntroTitles = {
+        'captains-autos': 'About Captains in the NHL',
+        'cards': 'About These Cards',
+        'autographed-cards': 'About These Cards',
+        'autographs': 'About These Autographs',
+        'more': 'About'
+    };
+
+    function applyCategoryIntro() {
+        const sec   = document.getElementById('category-intro');
+        const title = document.getElementById('category-intro-title');
+        const text  = document.getElementById('category-intro-text');
+        if (!sec || !title || !text) return;
+        const cat = portfolios.find(p => p.id === currentPortfolio);
+        if (!cat || !cat.singleGallery) {
+            sec.style.display = 'none';
+            return;
+        }
+        const key = 'cat-intro:' + currentPortfolio;
+        const override = textOverrides[key];
+        const seed = categoryIntroDefaults[currentPortfolio] || '';
+        const body = override != null ? override : seed;
+        title.textContent = categoryIntroTitles[currentPortfolio] || 'About';
+        text.dataset.editId = key;
+        text.textContent = body;
+        if (isAdmin) markEditable(text);
+        // Show for everyone if there's content; admins always (for editing).
+        if (isAdmin || (body && body.trim().length > 0)) {
+            sec.style.display = 'block';
+        } else {
+            sec.style.display = 'none';
         }
     }
 
