@@ -2088,40 +2088,51 @@
         }
     }
 
-    /* ── ABOUT PAGE COLLAGE ──
-       CSS columns for a true Pinterest-style masonry. Photos of any
-       aspect ratio cascade and tile without gaps. Hover lifts/brightens. */
-    .about-collage {
-        column-count: 4;
-        column-gap: 8px;
-        padding: 8px;
+    /* ── ABOUT PAGE LAYOUT (text in middle, photos either side) ── */
+    .about-layout {
+        display: grid;
+        grid-template-columns: 1fr minmax(0, 640px) 1fr;
+        gap: 18px;
+        padding: 24px;
         background: var(--caps-dark);
         border-bottom: 3px solid var(--caps-red);
+        align-items: start;
     }
-    .about-collage img {
+    .about-collage-side {
+        column-count: 2;
+        column-gap: 6px;
+    }
+    .about-collage-side img {
         width: 100%;
         height: auto;
         display: block;
-        margin-bottom: 8px;
+        margin-bottom: 6px;
         break-inside: avoid;
         border-radius: 2px;
         border: 1px solid rgba(255, 255, 255, 0.04);
         transition: transform 0.25s ease, filter 0.25s ease, box-shadow 0.25s ease;
         cursor: pointer;
     }
-    .about-collage img:hover {
-        transform: translateY(-3px);
+    .about-collage-side img:hover {
+        transform: translateY(-2px);
         filter: brightness(1.08);
-        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
     }
+    .about-text-center {
+        padding: 12px 4px;
+    }
+    /* Tablet: stack as photos / text / photos in three vertical sections,
+       each side panel widening to 3 cols for the larger viewport. */
     @media (max-width: 1100px) {
-        .about-collage { column-count: 3; }
+        .about-layout {
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+        .about-collage-side { column-count: 3; }
+        .about-text-center { padding: 24px 16px; }
     }
     @media (max-width: 700px) {
-        .about-collage { column-count: 2; }
-    }
-    @media (max-width: 400px) {
-        .about-collage { column-count: 1; }
+        .about-collage-side { column-count: 2; }
     }
 
     /* Skip the intro splash on subsequent loads in the same session.
@@ -2326,32 +2337,19 @@
         <div class="media-grid" id="media-grid"></div>
     </div>
 
-    <!-- ABOUT PAGE -->
+    <!-- ABOUT PAGE — text in the middle, photos in 2-column masonry on each side. -->
     <div id="page-about" class="page">
-
-        <!-- Personal photo collage at the top of the About page. Pinterest-
-             style masonry: photos cascade naturally regardless of aspect
-             ratio. 4 cols on wide screens, collapses to 3 / 2 / 1. -->
-        <section class="about-collage">
-            <img src="/images/about-1.jpg" alt="">
-            <img src="/images/about-2.jpg" alt="">
-            <img src="/images/about-3.jpg" alt="">
-            <img src="/images/about-4.jpg" alt="">
-            <img src="/images/about-5.jpg" alt="">
-            <img src="/images/about-6.jpg" alt="">
-            <img src="/images/about-7.jpg" alt="">
-            <img src="/images/about-8.jpg" alt="">
-            <img src="/images/about-9.jpg" alt="">
-            <img src="/images/about-10.jpg" alt="">
-            <img src="/images/about-11.jpg" alt="">
-            <img src="/images/about-12.jpg" alt="">
-            <img src="/images/about-13.jpg" alt="">
-            <img src="/images/about-14.jpg" alt="">
-            <img src="/images/about-15.jpg" alt="">
-        </section>
-
-        <div style="position:relative;display:flex;min-height:400px;background:var(--caps-dark)">
-            <div class="content-page" style="position:relative;z-index:2">
+        <section class="about-layout">
+            <div class="about-collage-side about-collage-left">
+                <img src="/images/about-1.jpg" alt="">
+                <img src="/images/about-2.jpg" alt="">
+                <img src="/images/about-3.jpg" alt="">
+                <img src="/images/about-4.jpg" alt="">
+                <img src="/images/about-5.jpg" alt="">
+                <img src="/images/about-6.jpg" alt="">
+                <img src="/images/about-7.jpg" alt="">
+            </div>
+            <div class="about-text-center content-page">
                 <h1>About the Collection</h1>
                 <div class="red-line"></div>
                 <p data-edit-id="about-p1">Welcome to The Vault — a personal collection dedicated to Washington Capitals memorabilia spanning decades of hockey history. Every piece in this collection has been carefully sourced, authenticated, and preserved.</p>
@@ -2363,7 +2361,17 @@
                     </div>
                 </div>
             </div>
-        </div>
+            <div class="about-collage-side about-collage-right">
+                <img src="/images/about-8.jpg" alt="">
+                <img src="/images/about-9.jpg" alt="">
+                <img src="/images/about-10.jpg" alt="">
+                <img src="/images/about-11.jpg" alt="">
+                <img src="/images/about-12.jpg" alt="">
+                <img src="/images/about-13.jpg" alt="">
+                <img src="/images/about-14.jpg" alt="">
+                <img src="/images/about-15.jpg" alt="">
+            </div>
+        </section>
     </div>
 
     <!-- CONTACT PAGE -->
