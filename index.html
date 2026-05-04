@@ -1556,7 +1556,8 @@
         }/* HERO */
 
         .hero {
-            min-height: auto
+            min-height: 78vh;
+            align-items: stretch;
         }
 
         .hero-left-bg {
@@ -1570,14 +1571,19 @@
         }
 
         .hero-content {
-            padding: 480px 20px 28px
+            flex: 1;
+            padding: 60px 20px 28px;
+            justify-content: space-between;
+            align-items: stretch;
         }
 
         .hero-logo {
-            width: 260px !important;
+            width: 240px !important;
             height: auto !important;
             display: block !important;
-            margin-bottom: 28px !important;
+            margin-bottom: 0 !important;
+            align-self: flex-start;
+            margin-left: 4%;
         }
 
         .hero-btns {
