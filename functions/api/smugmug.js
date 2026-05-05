@@ -281,6 +281,57 @@ export async function onRequest(context) {
       return new Response(JSON.stringify({ featured }), { headers: corsHeaders });
     }
 
+    // Delete a sub-gallery completely. Wipes all KV state for the player:
+    // album URL, cover, hero, hero position, and the player from the
+    // category's saved order. Body: { key } where key is "<catId>__<player>".
+    if (action === 'delete-gallery' && request.method === 'POST') {
+      const body = await request.json();
+      const { key } = body;
+      if (!key || !key.includes('__')) return new Response(JSON.stringify({ error: 'Missing or malformed key' }), { status: 400, headers: corsHeaders });
+      const [catId, playerName] = key.split('__');
+
+      // Wipe the simple per-gallery keys.
+      await env.CAPS_VAULT_KV.delete(key);
+      await env.CAPS_VAULT_KV.delete('cover:' + key);
+      await env.CAPS_VAULT_KV.delete('phero:' + key);
+      await env.CAPS_VAULT_KV.delete('pheropos:' + key);
+
+      // Remove the player from the saved gallery order for this category.
+      const ordersRaw = await env.CAPS_VAULT_KV.get('galleryOrders');
+      if (ordersRaw) {
+        const orders = JSON.parse(ordersRaw);
+        if (Array.isArray(orders[catId])) {
+          orders[catId] = orders[catId].filter(n => n !== playerName);
+          await env.CAPS_VAULT_KV.put('galleryOrders', JSON.stringify(orders));
+        }
+      }
+
+      // Remove any text overrides tied to this player/gallery
+      // (bio:<player>, pdetails:<key>).
+      const textsRaw = await env.CAPS_VAULT_KV.get('texts');
+      if (textsRaw) {
+        const texts = JSON.parse(textsRaw);
+        let changed = false;
+        if (texts['bio:' + playerName] != null) { delete texts['bio:' + playerName]; changed = true; }
+        if (texts['pdetails:' + key] != null) { delete texts['pdetails:' + key]; changed = true; }
+        if (changed) await env.CAPS_VAULT_KV.put('texts', JSON.stringify(texts));
+      }
+
+      // Drop any Featured Pieces that came from this gallery.
+      const featuredRaw = await env.CAPS_VAULT_KV.get('featured');
+      if (featuredRaw) {
+        const featured = JSON.parse(featuredRaw);
+        if (Array.isArray(featured)) {
+          const filtered = featured.filter(f => !(f && f.categoryId === catId && f.playerName === playerName));
+          if (filtered.length !== featured.length) {
+            await env.CAPS_VAULT_KV.put('featured', JSON.stringify(filtered));
+          }
+        }
+      }
+
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
     // Get all saved album URLs from KV (excludes cover and featured entries)
     if (action === 'list') {
       const list = await env.CAPS_VAULT_KV.list();

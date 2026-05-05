@@ -676,7 +676,34 @@
 
     .add-subgallery-tile:hover .subgallery-card-img {
         border-color: var(--caps-red)
-    }/* MEDIA GRID inside a sub-gallery */
+    }
+
+    /* Admin-only delete button on each sub-gallery card. */
+    .sg-delete-btn {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.75);
+        border: 1px solid var(--caps-red);
+        color: var(--caps-white);
+        font-size: 16px;
+        line-height: 1;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 5;
+        opacity: 0;
+        transition: opacity 0.15s, background 0.15s;
+        padding: 0;
+    }
+    .subgallery-card:hover .sg-delete-btn { opacity: 1; }
+    .sg-delete-btn:hover { background: var(--caps-red); }
+    /* MEDIA GRID inside a sub-gallery */
     .media-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -3110,6 +3137,7 @@
       <div class="subgallery-card-img">
         ${
         sg.cover ? `<img src="${sg.cover}" alt="${sg.name}">` : `<span style="font-size:48px;opacity:0.2">🏒</span>`}
+        ${isAdmin ? `<button type="button" class="sg-delete-btn" title="Delete this gallery" onclick="event.stopPropagation();deleteSubGallery(${i})">×</button>` : ''}
       </div>
       <div class="subgallery-card-label">${
         sg.name}</div>
@@ -3917,6 +3945,37 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ categoryId: catId, order })
         }).catch(e => console.warn('Gallery order sync failed:', e));
+    }
+
+    // Admin: permanently delete a sub-gallery (album URL, cover, hero,
+    // hero pos, gallery-order entry, bio/details overrides, and any
+    // featured items pointing at it). Confirms first.
+    async function deleteSubGallery(i) {
+        if (!isAdmin) return;
+        const catId = currentPortfolio;
+        if (!catId || !collectionData[catId] || !collectionData[catId][i]) return;
+        const sg = collectionData[catId][i];
+        if (!confirm(`Delete the "${sg.name}" gallery? This removes its photos, cover, bio, and all admin edits. This cannot be undone.`)) return;
+        const key = catId + '__' + sg.name;
+        try {
+            const resp = await fetch('/api/smugmug?action=delete-gallery', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key })
+            });
+            if (!resp.ok) throw new Error('Server returned ' + resp.status);
+        } catch (e) {
+            alert('Delete failed: ' + e.message);
+            return;
+        }
+        // Local state updates so the UI reflects deletion immediately.
+        collectionData[catId].splice(i, 1);
+        if (Array.isArray(homePhotos)) {
+            homePhotos = homePhotos.filter(f => !(f && f.categoryId === catId && f.playerName === sg.name));
+        }
+        renderSubGalleryGrid();
+        renderPortfolioGrid();
+        renderHomeGrid();
     }
 
     async function loadGalleryOrdersFromKV() {
