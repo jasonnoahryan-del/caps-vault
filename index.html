@@ -683,13 +683,13 @@
         position: absolute;
         top: 6px;
         right: 6px;
-        width: 26px;
-        height: 26px;
+        width: 32px;
+        height: 32px;
         border-radius: 50%;
-        background: rgba(0, 0, 0, 0.75);
+        background: rgba(0, 0, 0, 0.85);
         border: 1px solid var(--caps-red);
         color: var(--caps-white);
-        font-size: 16px;
+        font-size: 18px;
         line-height: 1;
         font-weight: 700;
         display: flex;
@@ -700,9 +700,15 @@
         opacity: 0;
         transition: opacity 0.15s, background 0.15s;
         padding: 0;
+        -webkit-tap-highlight-color: rgba(200,16,46,0.4);
     }
     .subgallery-card:hover .sg-delete-btn { opacity: 1; }
     .sg-delete-btn:hover { background: var(--caps-red); }
+    /* Touch devices have no hover, so the X would never appear. Show it
+       always on no-hover devices so admins can actually tap it. */
+    @media (hover: none) {
+        .sg-delete-btn { opacity: 0.95; }
+    }
     /* MEDIA GRID inside a sub-gallery */
     .media-grid {
         display: grid;
@@ -3834,7 +3840,7 @@
 
     async function loadPortfolioOrderFromKV() {
         try {
-            const resp = await fetch('/api/smugmug?action=list-portfolio-order');
+            const resp = await fetch('/api/smugmug?action=list-portfolio-order&_=' + Date.now());
             if (!resp.ok) return;
             const data = await resp.json();
             const order = data && Array.isArray(data.order) ? data.order : null;
@@ -3969,7 +3975,7 @@
 
     async function loadGalleryOrdersFromKV() {
         try {
-            const resp = await fetch('/api/smugmug?action=list-gallery-orders');
+            const resp = await fetch('/api/smugmug?action=list-gallery-orders&_=' + Date.now());
             if (!resp.ok) return;
             const data = await resp.json();
             if (!data.orders || typeof data.orders !== 'object') return;
@@ -4110,8 +4116,8 @@
     async function loadPlayerHerosFromKV() {
         try {
             const [heroResp, posResp] = await Promise.all([
-                fetch('/api/smugmug?action=list-player-heros'),
-                fetch('/api/smugmug?action=list-player-hero-positions')
+                fetch('/api/smugmug?action=list-player-heros&_=' + Date.now()),
+                fetch('/api/smugmug?action=list-player-hero-positions&_=' + Date.now())
             ]);
             if (heroResp && heroResp.ok) {
                 const data = await heroResp.json();
@@ -4492,7 +4498,7 @@
     // in before SmugMug fetches finish. Called from initial page load.
     async function loadStatsFromKV() {
         try {
-            const resp = await fetch('/api/smugmug?action=list-stats');
+            const resp = await fetch('/api/smugmug?action=list-stats&_=' + Date.now());
             if (!resp.ok) return;
             const data = await resp.json();
             if (data && data.stats) applyStats(data.stats);
@@ -4705,84 +4711,81 @@
         window.location.replace(u.toString());
     }
 
-    // Load album URLs from KV and auto-populate galleries for all visitors
+    // Load album URLs from KV and auto-populate galleries for all visitors.
+    // SmugMug fetches run in parallel (capped concurrency) instead of one
+    // gallery at a time — major speedup for large categories like sticks.
     async function loadFromKV() {
         try {
-            const resp = await fetch('/api/smugmug?action=list');
+            const resp = await fetch('/api/smugmug?action=list&_=' + Date.now());
             const kvData = await resp.json();
 
+            // First pass: register every gallery (push entries that aren't
+            // in the hardcoded list, set smugmugUrl). Synchronous, fast.
+            const fetchTasks = [];
             for (const [key, albumUrl] of Object.entries(kvData)) {
-                // Key format: categoryId__playerName
                 const parts = key.split('__');
-                if (parts.length !== 2)
-                    continue;
+                if (parts.length !== 2) continue;
                 const [catId, playerName] = parts;
-
-                if (!collectionData[catId])
-                    continue;
+                if (!collectionData[catId]) continue;
                 let sgIndex = collectionData[catId].findIndex(sg => sg.name === playerName);
                 if (sgIndex === -1) {
-                    // KV has an album for a gallery the admin created beyond
-                    // the hardcoded list — push it so visitors see it too.
                     collectionData[catId].push({ name: playerName, desc: '', cover: null, items: [] });
                     sgIndex = collectionData[catId].length - 1;
                 }
-
                 const sg = collectionData[catId][sgIndex];
                 sg.smugmugUrl = albumUrl;
-
-                // Only auto-load if gallery is empty
-                if (sg.items.length === 0) {
-                    try {
-                        const url = new URL(albumUrl);
-                        const path = url.pathname;
-                        const imgResp = await fetch(`/api/smugmug?path=${encodeURIComponent(path)}`);
-                        const data = await imgResp.json();
-                        if (data.images && data.images.length > 0) {
-                            function getSizedUrl(thumbUrl, size) {
-                                if (!thumbUrl)
-                                    return '';
-                                return thumbUrl.replace(/\/Th\/(.+?)-Th\./, `/${size}/$1-${size}.`);
-                            }
-                            sg.items = data.images.map(img => ({
-                                name: img.name,
-                                type: img.isVideo ? 'video' : 'photo',
-                                src: img.isVideo ? img.videoUrl : (img.largeUrl || img.thumbUrl),
-                                thumbUrl: img.thumbUrl,
-                                largeUrl: img.largeUrl || img.thumbUrl,
-                                videoUrl: img.videoUrl || '',
-                                posterUrl: img.posterUrl || img.thumbUrl || '',
-                                webUri: img.webUri || '',
-                                year: '',
-                                notes: img.caption || ''
-                            }));
-                            // Bug fix: if the user previously chose a specific
-                            // cover, restore it from the saved coverIndex now
-                            // that items have loaded.
-                            if (!sg.cover && sg._pendingCoverIndex != null && sg.items[sg._pendingCoverIndex]) {
-                                const it = sg.items[sg._pendingCoverIndex];
-                                sg.cover = it.largeUrl || it.thumbUrl || it.src;
-                            }
-                            if (!sg.cover && sg.items[0]?.largeUrl)
-                                sg.cover = sg.items[0].largeUrl;
-                        }
-                    } catch (e) {
-                        console.warn(`Failed to load ${playerName}:`, e);
-                    }
-                }
+                if (sg.items.length === 0) fetchTasks.push({ sg, albumUrl, playerName });
             }
+
+            // Second pass: kick off SmugMug fetches in parallel batches.
+            // Cap concurrency at 8 — fast enough to feel snappy, low enough
+            // to not exceed SmugMug rate limits or saturate mobile networks.
+            const CONCURRENCY = 8;
+            const oneFetch = async ({ sg, albumUrl, playerName }) => {
+                try {
+                    const url = new URL(albumUrl);
+                    const imgResp = await fetch(`/api/smugmug?path=${encodeURIComponent(url.pathname)}`);
+                    const data = await imgResp.json();
+                    if (!data.images || data.images.length === 0) return;
+                    sg.items = data.images.map(img => ({
+                        name: img.name,
+                        type: img.isVideo ? 'video' : 'photo',
+                        src: img.isVideo ? img.videoUrl : (img.largeUrl || img.thumbUrl),
+                        thumbUrl: img.thumbUrl,
+                        largeUrl: img.largeUrl || img.thumbUrl,
+                        videoUrl: img.videoUrl || '',
+                        posterUrl: img.posterUrl || img.thumbUrl || '',
+                        webUri: img.webUri || '',
+                        year: '',
+                        notes: img.caption || ''
+                    }));
+                    if (!sg.cover && sg._pendingCoverIndex != null && sg.items[sg._pendingCoverIndex]) {
+                        const it = sg.items[sg._pendingCoverIndex];
+                        sg.cover = it.largeUrl || it.thumbUrl || it.src;
+                    }
+                    if (!sg.cover && sg.items[0]?.largeUrl) {
+                        sg.cover = sg.items[0].largeUrl;
+                    }
+                } catch (e) {
+                    console.warn(`Failed to load ${playerName}:`, e);
+                }
+            };
+
+            // Simple worker pool: pull tasks off the queue until empty.
+            const queue = fetchTasks.slice();
+            const workers = Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
+                while (queue.length) {
+                    const task = queue.shift();
+                    if (task) await oneFetch(task);
+                }
+            });
+            await Promise.all(workers);
+
             renderPortfolioGrid();
             renderHomeGrid();
-            // Bug fix: also refresh the sub-gallery list page in case the user
-            // already navigated into a category before the async SmugMug
-            // fetches finished. Without this, thumbnails appear missing on
-            // the first visit until the user navigates away and back.
             if (typeof renderSubGalleryGrid === 'function' && currentPortfolio) {
                 renderSubGalleryGrid();
             }
-            // Now that every album has been pulled, the stat numbers are
-            // accurate — flag the load as complete and persist to KV so the
-            // next visitor sees them instantly.
             kvFullyLoaded = true;
             saveStatsToKV();
         } catch (e) {
@@ -4798,7 +4801,7 @@
 
     async function loadTextsFromKV() {
         try {
-            const resp = await fetch('/api/smugmug?action=list-texts');
+            const resp = await fetch('/api/smugmug?action=list-texts&_=' + Date.now());
             if (!resp.ok) return;
             const data = await resp.json();
             if (data.texts && typeof data.texts === 'object') {
@@ -4913,7 +4916,7 @@
     // hardcoded defaults.
     async function loadPortfolioCoversFromKV() {
         try {
-            const resp = await fetch('/api/smugmug?action=list-portfolio-covers');
+            const resp = await fetch('/api/smugmug?action=list-portfolio-covers&_=' + Date.now());
             if (!resp.ok) return;
             const data = await resp.json();
             if (data.covers && typeof data.covers === 'object') {
@@ -4929,7 +4932,7 @@
     // same lineup, not just the browser that toggled them.
     async function loadFeaturedFromKV() {
         try {
-            const resp = await fetch('/api/smugmug?action=list-featured');
+            const resp = await fetch('/api/smugmug?action=list-featured&_=' + Date.now());
             if (!resp.ok) return;
             const data = await resp.json();
             if (Array.isArray(data.featured)) {
@@ -4953,7 +4956,7 @@
 
     async function loadCoversFromKV() {
         try {
-            const resp = await fetch('/api/smugmug?action=list-covers');
+            const resp = await fetch('/api/smugmug?action=list-covers&_=' + Date.now());
             if (!resp.ok) return;
             const covers = await resp.json();
             for (const [key, coverUrl] of Object.entries(covers)) {
