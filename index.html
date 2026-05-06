@@ -3358,6 +3358,11 @@
         // (uploaded base64 covers can't be served to other visitors anyway).
         if (sg.cover && sg.cover.startsWith('http')) {
             const kvKey = `${currentPortfolio}__${sg.name}`;
+            // Lock the cover for this session so any in-flight or
+            // future loadCoversFromKV() responses (which may be slow on
+            // sticks or stale due to KV eventual consistency) don't
+            // overwrite the freshly-chosen cover.
+            recentlySetCovers.add(kvKey);
             fetch('/api/smugmug?action=save-cover', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -4940,6 +4945,12 @@
     // Load admin-chosen covers from KV so every visitor (not just the
     // browser that set them) sees the chosen thumbnails. Server is the
     // source of truth — KV covers override any local default.
+    // Galleries whose cover the admin set during this session. We never
+    // let a KV response overwrite these — Cloudflare KV is eventually
+    // consistent, and the slow loadCoversFromKV() fetch can land after
+    // the user has already chosen a new cover and return the stale value.
+    const recentlySetCovers = new Set();
+
     async function loadCoversFromKV() {
         try {
             const resp = await fetch('/api/smugmug?action=list-covers');
@@ -4947,6 +4958,7 @@
             const covers = await resp.json();
             for (const [key, coverUrl] of Object.entries(covers)) {
                 if (!coverUrl) continue;
+                if (recentlySetCovers.has(key)) continue;
                 const parts = key.split('__');
                 if (parts.length !== 2) continue;
                 const [catId, playerName] = parts;
