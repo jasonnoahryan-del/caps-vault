@@ -3976,6 +3976,7 @@
         renderSubGalleryGrid();
         renderPortfolioGrid();
         renderHomeGrid();
+        saveStatsToKV();
     }
 
     async function loadGalleryOrdersFromKV() {
@@ -4445,16 +4446,19 @@
     //     even if you've shot it from 8 angles).
     //   * For single-gallery categories (cards, autographs, etc. — flagged
     //     singleGallery: true): each item in the one gallery = one piece.
-    function renderStats() {
+    // Track whether the slow KV+SmugMug fetch chain has finished so we
+    // only persist stats that reflect the full data set (otherwise the
+    // KV cache could get clobbered with partial-load numbers).
+    let kvFullyLoaded = false;
+
+    function computeStats() {
         let photos = 0, total = 0, jerseys = 0, equip = 0, cards = 0;
         portfolios.forEach(p => {
             const galleries = collectionData[p.id];
             if (!Array.isArray(galleries)) return;
-            // Total photos = every uploaded photo/video across every gallery.
             galleries.forEach(sg => {
                 if (sg && Array.isArray(sg.items)) photos += sg.items.length;
             });
-            // Physical-piece count differs by category type (see comment above).
             const count = p.singleGallery
                 ? galleries.reduce((s, sg) => s + (sg && sg.items ? sg.items.length : 0), 0)
                 : galleries.filter(sg => sg && sg.items && sg.items.length > 0).length;
@@ -4467,15 +4471,60 @@
                 cards += count;
             }
         });
+        return { photos, total, jerseys, equip, cards };
+    }
+
+    function applyStats(s) {
+        if (!s) return;
         const setStat = (id, n) => {
             const el = document.getElementById(id);
             if (el) el.textContent = (n || 0).toLocaleString();
         };
-        setStat('stat-photos', photos);
-        setStat('stat-total', total);
-        setStat('stat-jerseys', jerseys);
-        setStat('stat-equipment', equip);
-        setStat('stat-cards', cards);
+        setStat('stat-photos', s.photos);
+        setStat('stat-total', s.total);
+        setStat('stat-jerseys', s.jerseys);
+        setStat('stat-equipment', s.equip);
+        setStat('stat-cards', s.cards);
+    }
+
+    // Counts each physical piece, not photos:
+    //   * For per-player categories (jerseys, sticks, equipment, pucks):
+    //     each populated sub-gallery = one piece.
+    //   * For single-gallery categories (cards, autographs, etc.):
+    //     each item in the one gallery = one piece.
+    // While SmugMug is still being fetched, computed stats would only
+    // reflect partially-loaded galleries and clobber the KV-cached numbers,
+    // so we skip recomputing until kvFullyLoaded flips true.
+    function renderStats() {
+        if (!kvFullyLoaded) return;
+        applyStats(computeStats());
+    }
+
+    // Pull the cached stats from KV and paint them so the strip is filled
+    // in before SmugMug fetches finish. Called from initial page load.
+    async function loadStatsFromKV() {
+        try {
+            const resp = await fetch('/api/smugmug?action=list-stats');
+            if (!resp.ok) return;
+            const data = await resp.json();
+            if (data && data.stats) applyStats(data.stats);
+        } catch (e) { /* keep going — fresh compute will fill it in */ }
+    }
+
+    // Persist the current computed stats to KV. Debounced so a flurry of
+    // re-renders during data load doesn't hammer the API. Only runs once
+    // the slow fetch chain has flagged the data set as complete.
+    function saveStatsToKV() {
+        if (!kvFullyLoaded) return;
+        clearTimeout(saveStatsToKV._t);
+        saveStatsToKV._t = setTimeout(() => {
+            const stats = computeStats();
+            fetch('/api/smugmug?action=save-stats', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ stats })
+            }).catch(() => {});
+        }, 1500);
     }
 
     // ── HOME PHOTOS ──
@@ -4743,6 +4792,11 @@
             if (typeof renderSubGalleryGrid === 'function' && currentPortfolio) {
                 renderSubGalleryGrid();
             }
+            // Now that every album has been pulled, the stat numbers are
+            // accurate — flag the load as complete and persist to KV so the
+            // next visitor sees them instantly.
+            kvFullyLoaded = true;
+            saveStatsToKV();
         } catch (e) {
             console.warn('KV load failed:', e);
         }
@@ -4929,6 +4983,9 @@
 
     initLogos();
     loadCollection();
+    // Cached stats first — paints the numbers instantly so the home page
+    // isn't blank while loadFromKV() spins through SmugMug fetches.
+    loadStatsFromKV();
     loadFromKV();
     loadCoversFromKV();
     loadPortfolioCoversFromKV();

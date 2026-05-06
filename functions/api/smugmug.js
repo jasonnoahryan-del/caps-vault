@@ -281,6 +281,24 @@ export async function onRequest(context) {
       return new Response(JSON.stringify({ featured }), { headers: corsHeaders });
     }
 
+    // Save the home-page stats numbers to KV so they show instantly on
+    // first paint instead of waiting for every SmugMug album to load.
+    // Body: { stats: { photos, total, jerseys, equip, cards } }
+    if (action === 'save-stats' && request.method === 'POST') {
+      const body = await request.json();
+      const stats = body && body.stats;
+      if (!stats || typeof stats !== 'object') return new Response(JSON.stringify({ error: 'Missing stats' }), { status: 400, headers: corsHeaders });
+      await env.CAPS_VAULT_KV.put('stats', JSON.stringify(stats));
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Get the saved home-page stats. Returns { stats: {...} } or empty.
+    if (action === 'list-stats') {
+      const stored = await env.CAPS_VAULT_KV.get('stats');
+      const stats = stored ? JSON.parse(stored) : null;
+      return new Response(JSON.stringify({ stats }), { headers: corsHeaders });
+    }
+
     // Delete a sub-gallery completely. Wipes all KV state for the player:
     // album URL, cover, hero, hero position, and the player from the
     // category's saved order. Body: { key } where key is "<catId>__<player>".
@@ -345,6 +363,7 @@ export async function onRequest(context) {
         if (key.name === 'portfolioCovers') continue;
         if (key.name === 'galleryOrders') continue;
         if (key.name === 'portfolioOrder') continue;
+        if (key.name === 'stats') continue;
         data[key.name] = await env.CAPS_VAULT_KV.get(key.name);
       }
       return new Response(JSON.stringify(data), { headers: corsHeaders });
