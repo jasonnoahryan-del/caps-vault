@@ -3975,6 +3975,10 @@
         if (Array.isArray(homePhotos)) {
             homePhotos = homePhotos.filter(f => !(f && f.categoryId === catId && f.playerName === sg.name));
         }
+        // Persist the new (smaller) collectionData to localStorage so the
+        // deleted gallery doesn't get restored on next page load. Without
+        // this, loadCollection() would push it back from the saved data.
+        saveCollection();
         renderSubGalleryGrid();
         renderPortfolioGrid();
         renderHomeGrid();
@@ -4665,14 +4669,21 @@
                 if (!collectionData[catId])
                     return;
                 saveData[catId].forEach((sgData) => {
-                    // Only restore galleries that already exist in
-                    // collectionData (hardcoded names). KV is the source
-                    // of truth for any other galleries — loadFromKV() will
-                    // re-add them if they still exist server-side. This
-                    // prevents stale localStorage on one device from
-                    // resurrecting galleries the admin deleted elsewhere.
-                    const target = collectionData[catId].find(sg => sg && sg.name === sgData.name);
-                    if (!target) return;
+                    // Skip if the admin recently deleted this gallery on
+                    // this device — don't resurrect it from localStorage.
+                    const kvKey = catId + '__' + sgData.name;
+                    if (isRecentAdmin('delete', kvKey)) return;
+                    // Find existing entry (hardcoded name); if not, push
+                    // a new one so the admin's saved data (cover, items,
+                    // smugmugUrl) is restored. This is critical for
+                    // categories with no hardcoded names (e.g. sticks)
+                    // where without this push the cover URL would be
+                    // lost on every reload.
+                    let target = collectionData[catId].find(sg => sg && sg.name === sgData.name);
+                    if (!target) {
+                        target = { name: sgData.name, desc: sgData.desc || '', cover: null, items: [] };
+                        collectionData[catId].push(target);
+                    }
                     // Restore smugmug-loaded items
                     const restoredItems = sgData.items.filter(item => item.src !== '__local__');
                     if (restoredItems.length > 0) {
