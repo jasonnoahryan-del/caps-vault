@@ -3369,6 +3369,10 @@
             // sticks or stale due to KV eventual consistency) don't
             // overwrite the freshly-chosen cover.
             recentlySetCovers.add(kvKey);
+            // Same lock, but persisted to localStorage with a TTL so it
+            // survives a reload (KV propagation can be slower than the
+            // user's reload reflex).
+            markRecentAdmin('cover', kvKey);
             fetch('/api/smugmug?action=save-cover', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -3951,6 +3955,10 @@
         const sg = collectionData[catId][i];
         if (!confirm(`Delete the "${sg.name}" gallery? This removes its photos, cover, bio, and all admin edits. This cannot be undone.`)) return;
         const key = catId + '__' + sg.name;
+        // Mark as recently-deleted FIRST so even if the page reloads
+        // before the API call resolves, we won't re-add this gallery
+        // from a stale KV list response.
+        markRecentAdmin('delete', key);
         try {
             const resp = await fetch('/api/smugmug?action=delete-gallery', {
                 method: 'POST',
@@ -4723,6 +4731,10 @@
             // in the hardcoded list, set smugmugUrl). Synchronous, fast.
             const fetchTasks = [];
             for (const [key, albumUrl] of Object.entries(kvData)) {
+                // Skip galleries the admin just deleted on this device. KV
+                // list() is eventually consistent, so the deleted key may
+                // still appear for ~60s after the API confirmed success.
+                if (isRecentAdmin('delete', key)) continue;
                 const parts = key.split('__');
                 if (parts.length !== 2) continue;
                 const [catId, playerName] = parts;
@@ -4954,6 +4966,42 @@
     // the user has already chosen a new cover and return the stale value.
     const recentlySetCovers = new Set();
 
+    // Cross-reload version of the same idea, persisted to localStorage with
+    // a TTL. Tracks two kinds of recent admin writes — covers chosen and
+    // galleries deleted — so a reload that happens within the KV
+    // propagation window doesn't show the old data again.
+    const ADMIN_WRITE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+    function _adminMarks(kind) {
+        try { return JSON.parse(localStorage.getItem('admin:' + kind) || '{}'); }
+        catch (e) { return {}; }
+    }
+    function _saveAdminMarks(kind, map) {
+        try { localStorage.setItem('admin:' + kind, JSON.stringify(map)); } catch (e) {}
+    }
+    function markRecentAdmin(kind, key) {
+        const map = _adminMarks(kind);
+        map[key] = Date.now();
+        _saveAdminMarks(kind, map);
+    }
+    function isRecentAdmin(kind, key) {
+        const t = _adminMarks(kind)[key];
+        return t && (Date.now() - t < ADMIN_WRITE_TTL_MS);
+    }
+    // Sweep expired entries on each check-set boundary; cheap and keeps
+    // localStorage small.
+    function pruneAdminMarks() {
+        ['cover', 'delete'].forEach(kind => {
+            const map = _adminMarks(kind);
+            const now = Date.now();
+            let dirty = false;
+            for (const k of Object.keys(map)) {
+                if (now - map[k] >= ADMIN_WRITE_TTL_MS) { delete map[k]; dirty = true; }
+            }
+            if (dirty) _saveAdminMarks(kind, map);
+        });
+    }
+    pruneAdminMarks();
+
     async function loadCoversFromKV() {
         try {
             const resp = await fetch('/api/smugmug?action=list-covers&_=' + Date.now());
@@ -4962,6 +5010,7 @@
             for (const [key, coverUrl] of Object.entries(covers)) {
                 if (!coverUrl) continue;
                 if (recentlySetCovers.has(key)) continue;
+                if (isRecentAdmin('cover', key)) continue;
                 const parts = key.split('__');
                 if (parts.length !== 2) continue;
                 const [catId, playerName] = parts;
