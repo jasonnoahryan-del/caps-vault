@@ -1,0 +1,13 @@
+# Cloudflare Pages: per-path response headers.
+# Goal: stop iOS Safari (and other aggressive caches) from showing stale
+# HTML or stale API JSON. Static assets like images/audio can still cache
+# normally — Cloudflare Pages defaults handle those.
+
+/
+  Cache-Control: no-cache, must-revalidate
+
+/index.html
+  Cache-Control: no-cache, must-revalidate
+
+/api/*
+  Cache-Control: no-store

@@ -4614,15 +4614,14 @@
                 if (!collectionData[catId])
                     return;
                 saveData[catId].forEach((sgData) => {
-                    // Match by NAME (not index) so admin-created galleries
-                    // beyond the hardcoded list survive a refresh. If no
-                    // existing entry matches, push the saved gallery onto
-                    // the list as a new entry.
-                    let target = collectionData[catId].find(sg => sg && sg.name === sgData.name);
-                    if (!target) {
-                        target = { name: sgData.name, desc: sgData.desc || '', cover: null, items: [] };
-                        collectionData[catId].push(target);
-                    }
+                    // Only restore galleries that already exist in
+                    // collectionData (hardcoded names). KV is the source
+                    // of truth for any other galleries — loadFromKV() will
+                    // re-add them if they still exist server-side. This
+                    // prevents stale localStorage on one device from
+                    // resurrecting galleries the admin deleted elsewhere.
+                    const target = collectionData[catId].find(sg => sg && sg.name === sgData.name);
+                    if (!target) return;
                     // Restore smugmug-loaded items
                     const restoredItems = sgData.items.filter(item => item.src !== '__local__');
                     if (restoredItems.length > 0) {
@@ -4652,6 +4651,21 @@
         } catch (e) {
             console.warn('Load failed:', e);
         }
+    }
+
+    // Admin: nuke this device's localStorage (collection + featured) and
+    // hard-reload the page so everything pulls fresh from KV. Use when
+    // one device shows stale data the others don't.
+    function resetLocalCache() {
+        if (!confirm('Reset this device\'s local cache?\n\nThis clears saved gallery data on this browser only and reloads the page. KV server data is untouched.')) return;
+        try {
+            localStorage.removeItem('capsVaultCollection');
+            localStorage.removeItem('capsVaultHomePhotos');
+        } catch (e) {}
+        // Cache-busting reload: query string forces Safari to refetch HTML.
+        const u = new URL(window.location.href);
+        u.searchParams.set('_cb', Date.now().toString());
+        window.location.replace(u.toString());
     }
 
     // Load album URLs from KV and auto-populate galleries for all visitors
@@ -5065,6 +5079,7 @@
         <span>⚙ Admin Mode</span>
         <div style="display:flex;gap:8px">
             <button onclick="document.getElementById('smugmug-settings-modal').classList.add('open')">SmugMug Settings</button>
+            <button onclick="resetLocalCache()" title="Wipe this device's saved data and reload from server. Use this if mobile and desktop look out of sync.">Reset Local Cache</button>
             <button onclick="logout()">Log Out</button>
         </div>
     </div>
