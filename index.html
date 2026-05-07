@@ -3269,7 +3269,7 @@
         renderSubGalleryGrid();
     }
 
-    function setCoverPhoto(i) {
+    async function setCoverPhoto(i) {
         const sg = collectionData[currentPortfolio][currentSubGalleryIndex];
         // Use largeUrl for cover so it's not pixelated
         sg.cover = sg.items[i].largeUrl || sg.items[i].thumbUrl || sg.items[i].src;
@@ -3288,11 +3288,20 @@
             // survives a reload (KV propagation can be slower than the
             // user's reload reflex).
             markRecentAdmin('cover', kvKey);
-            fetch('/api/smugmug?action=save-cover', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ key: kvKey, coverUrl: sg.cover })
-            }).catch(e => console.warn('Cover KV sync failed:', e));
+            // Await the response so we can surface a failure to the admin
+            // instead of failing silently. A non-OK status here means the
+            // cover never landed in KV, so other devices/private windows
+            // would still show the items[0] fallback.
+            try {
+                const r = await fetch('/api/smugmug?action=save-cover', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: kvKey, coverUrl: sg.cover })
+                });
+                if (!r.ok) throw new Error('Server returned ' + r.status);
+            } catch (e) {
+                alert('⚠ Cover save to KV failed: ' + e.message + '\n\nThis cover will only persist on this device. Try again or check your network.');
+            }
         }
         renderSubGalleryGrid();
         renderPortfolioGrid();
@@ -4636,8 +4645,12 @@
     async function kvDebug() {
         if (!isAdmin) return;
         try {
-            const resp = await fetch('/api/smugmug?action=list&_=' + Date.now());
-            const kvData = await resp.json();
+            const [galleriesResp, coversResp] = await Promise.all([
+                fetch('/api/smugmug?action=list&_=' + Date.now()),
+                fetch('/api/smugmug?action=list-covers&_=' + Date.now())
+            ]);
+            const kvData = await galleriesResp.json();
+            const coversData = await coversResp.json();
             const kvByCat = {};
             for (const k of Object.keys(kvData)) {
                 const parts = k.split('__');
@@ -4645,6 +4658,10 @@
                 const [cat, name] = parts;
                 (kvByCat[cat] ||= []).push(name);
             }
+            // Track which keys have covers in KV so admins can see if a save
+            // actually landed. The displayed cover URL is truncated for
+            // readability — full URL would blow up an alert dialog.
+            const coverKeys = new Set(Object.keys(coversData).filter(k => coversData[k]));
             const lsByCat = {};
             try {
                 const ls = JSON.parse(localStorage.getItem('capsVaultCollection') || '{}');
@@ -4660,9 +4677,14 @@
             const allCats = new Set([...Object.keys(kvByCat), ...Object.keys(lsByCat), ...Object.keys(memByCat)]);
             allCats.forEach(cat => {
                 lines.push('=== ' + cat + ' ===');
-                lines.push('  KV:   [' + (kvByCat[cat] || []).sort().join(', ') + ']');
-                lines.push('  LS:   [' + (lsByCat[cat] || []).sort().join(', ') + ']');
-                lines.push('  MEM:  [' + (memByCat[cat] || []).sort().join(', ') + ']');
+                lines.push('  KV:    [' + (kvByCat[cat] || []).sort().join(', ') + ']');
+                // Mark each KV gallery with ✓ if it has a cover stored, ✗ if not.
+                const coverStatus = (kvByCat[cat] || []).sort().map(n => {
+                    return n + (coverKeys.has(cat + '__' + n) ? ' ✓' : ' ✗');
+                });
+                lines.push('  COVER: [' + coverStatus.join(', ') + ']');
+                lines.push('  LS:    [' + (lsByCat[cat] || []).sort().join(', ') + ']');
+                lines.push('  MEM:   [' + (memByCat[cat] || []).sort().join(', ') + ']');
             });
             alert(lines.join('\n'));
         } catch (e) {
