@@ -4769,11 +4769,21 @@
     // gallery at a time — major speedup for large categories like sticks.
     async function loadFromKV() {
         try {
-            const resp = await fetch('/api/smugmug?action=list&_=' + Date.now());
+            // Fetch the gallery list AND the cover map in parallel, then
+            // apply the cover in the same first pass that registers each
+            // gallery. This avoids a race where a separate loadCoversFromKV
+            // resolves before the gallery exists in collectionData and
+            // silently drops the cover (causing items[0] fallback to win).
+            const [resp, coversResp] = await Promise.all([
+                fetch('/api/smugmug?action=list&_=' + Date.now()),
+                fetch('/api/smugmug?action=list-covers&_=' + Date.now())
+            ]);
             const kvData = await resp.json();
+            const coverMap = coversResp.ok ? await coversResp.json() : {};
 
             // First pass: register every gallery (push entries that aren't
-            // in the hardcoded list, set smugmugUrl). Synchronous, fast.
+            // in the hardcoded list, set smugmugUrl, apply cover from KV).
+            // Synchronous, fast.
             const fetchTasks = [];
             for (const [key, albumUrl] of Object.entries(kvData)) {
                 // Skip galleries the admin just deleted on this device. KV
@@ -4791,6 +4801,14 @@
                 }
                 const sg = collectionData[catId][sgIndex];
                 sg.smugmugUrl = albumUrl;
+                // Apply the KV cover NOW, before the items-fallback below
+                // can claim sg.cover for items[0]. Skip if the admin just
+                // chose a cover on this device (recentlySetCovers / mark)
+                // to honor the local choice during KV propagation.
+                const kvCover = coverMap[key];
+                if (kvCover && !sg.cover && !recentlySetCovers.has(key) && !isRecentAdmin('cover', key)) {
+                    sg.cover = kvCover;
+                }
                 if (sg.items.length === 0) fetchTasks.push({ sg, albumUrl, playerName });
             }
 
@@ -5078,8 +5096,11 @@
     // Cached stats first — paints the numbers instantly so the home page
     // isn't blank while loadFromKV() spins through SmugMug fetches.
     loadStatsFromKV();
+    // loadFromKV now also applies covers in its first pass, so we no
+    // longer call loadCoversFromKV() here — it raced with loadFromKV
+    // and silently dropped covers when collectionData wasn't populated
+    // yet. Function definition retained for any future on-demand use.
     loadFromKV();
-    loadCoversFromKV();
     loadPortfolioCoversFromKV();
     loadFeaturedFromKV();
     loadTextsFromKV();
