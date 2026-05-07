@@ -4715,6 +4715,103 @@
         }
     }
 
+    // Admin: dump the current contents of KV (album URLs only — no covers
+    // or other prefixed keys) so we can compare to what's on screen.
+    // Also dumps the current localStorage state for the same categories.
+    async function kvDebug() {
+        if (!isAdmin) return;
+        try {
+            const resp = await fetch('/api/smugmug?action=list&_=' + Date.now());
+            const kvData = await resp.json();
+            const kvByCat = {};
+            for (const k of Object.keys(kvData)) {
+                const parts = k.split('__');
+                if (parts.length !== 2) continue;
+                const [cat, name] = parts;
+                (kvByCat[cat] ||= []).push(name);
+            }
+            const lsByCat = {};
+            try {
+                const ls = JSON.parse(localStorage.getItem('capsVaultCollection') || '{}');
+                Object.keys(ls).forEach(cat => {
+                    lsByCat[cat] = (ls[cat] || []).map(sg => sg.name);
+                });
+            } catch (e) {}
+            const memByCat = {};
+            Object.keys(collectionData).forEach(cat => {
+                memByCat[cat] = collectionData[cat].map(sg => sg.name);
+            });
+            const lines = [];
+            const allCats = new Set([...Object.keys(kvByCat), ...Object.keys(lsByCat), ...Object.keys(memByCat)]);
+            allCats.forEach(cat => {
+                lines.push('=== ' + cat + ' ===');
+                lines.push('  KV:   [' + (kvByCat[cat] || []).sort().join(', ') + ']');
+                lines.push('  LS:   [' + (lsByCat[cat] || []).sort().join(', ') + ']');
+                lines.push('  MEM:  [' + (memByCat[cat] || []).sort().join(', ') + ']');
+            });
+            alert(lines.join('\n'));
+        } catch (e) {
+            alert('KV debug failed: ' + e.message);
+        }
+    }
+
+    // Admin: forcibly delete every KV gallery entry whose name isn't in
+    // the hardcoded JS list for its category. Last-resort cleanup for
+    // ghost galleries that delete-button + KV propagation can't budge.
+    // Builds the keep list from the same arrays used at boot, so any
+    // category with a hardcoded names array is covered.
+    async function purgeNonHardcoded() {
+        if (!isAdmin) return;
+        // Snapshot the legitimate hardcoded names per category. Sticks,
+        // pucks, cards, autos etc have NO hardcoded list — for those we
+        // skip purging (we don't know what's legit). Equipment, both
+        // jersey types, and alt jerseys are the categories with arrays.
+        const hardcodedNames = {
+            'home-jerseys': new Set(typeof homeJerseyNames !== 'undefined' ? homeJerseyNames : []),
+            'away-jerseys': new Set(typeof awayJerseyNames !== 'undefined' ? awayJerseyNames : []),
+            'alt-jerseys': new Set(typeof altJerseyNames !== 'undefined' ? altJerseyNames : []),
+            'equipment': new Set(typeof equipmentNames !== 'undefined' ? equipmentNames : [])
+        };
+        try {
+            const resp = await fetch('/api/smugmug?action=list&_=' + Date.now());
+            const kvData = await resp.json();
+            const toDelete = [];
+            for (const key of Object.keys(kvData)) {
+                const parts = key.split('__');
+                if (parts.length !== 2) continue;
+                const [cat, name] = parts;
+                // Only purge categories that have a hardcoded list defined.
+                if (!hardcodedNames[cat]) continue;
+                if (!hardcodedNames[cat].has(name)) toDelete.push(key);
+            }
+            if (toDelete.length === 0) {
+                alert('Nothing to purge — every KV entry matches a hardcoded name.');
+                return;
+            }
+            if (!confirm(`Purge ${toDelete.length} ghost galler${toDelete.length === 1 ? 'y' : 'ies'} from KV?\n\n` + toDelete.join('\n') + '\n\nThis cannot be undone.')) return;
+            let ok = 0, fail = 0;
+            for (const key of toDelete) {
+                markRecentAdmin('delete', key);
+                try {
+                    const r = await fetch('/api/smugmug?action=delete-gallery', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ key })
+                    });
+                    if (r.ok) ok++; else fail++;
+                } catch (e) { fail++; }
+            }
+            // Wipe localStorage so the saved data doesn't bring anything back.
+            try { localStorage.removeItem('capsVaultCollection'); } catch (e) {}
+            alert(`Purge complete. Deleted: ${ok}. Failed: ${fail}. Reloading...`);
+            const u = new URL(window.location.href);
+            u.searchParams.set('_cb', Date.now().toString());
+            window.location.replace(u.toString());
+        } catch (e) {
+            alert('Purge failed: ' + e.message);
+        }
+    }
+
     // Admin: nuke this device's localStorage (collection + featured) and
     // hard-reload the page so everything pulls fresh from KV. Use when
     // one device shows stale data the others don't.
@@ -5192,9 +5289,11 @@
     <!-- ADMIN BAR (only visible when logged in) -->
     <div class="admin-bar" id="admin-bar" style="display:none">
         <span>⚙ Admin Mode</span>
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button onclick="document.getElementById('smugmug-settings-modal').classList.add('open')">SmugMug Settings</button>
             <button onclick="resetLocalCache()" title="Wipe this device's saved data and reload from server. Use this if mobile and desktop look out of sync.">Reset Local Cache</button>
+            <button onclick="kvDebug()" title="Show what's actually stored in KV vs what's displayed.">KV Debug</button>
+            <button onclick="purgeNonHardcoded()" title="Delete every gallery in EVERY category whose name isn't in the hardcoded JS lists. Last-resort cleanup.">Purge Ghosts</button>
             <button onclick="logout()">Log Out</button>
         </div>
     </div>
