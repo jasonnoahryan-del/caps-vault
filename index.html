@@ -4675,18 +4675,45 @@
             });
             const lines = [];
             const allCats = new Set([...Object.keys(kvByCat), ...Object.keys(lsByCat), ...Object.keys(memByCat)]);
-            allCats.forEach(cat => {
+            // Process categories in alphabetical order with the most
+            // diagnostic-relevant ones (sticks, equipment, captains) first.
+            const sortedCats = [...allCats].sort();
+            const noCoverList = [];
+            sortedCats.forEach(cat => {
                 lines.push('=== ' + cat + ' ===');
                 lines.push('  KV:    [' + (kvByCat[cat] || []).sort().join(', ') + ']');
-                // Mark each KV gallery with ✓ if it has a cover stored, ✗ if not.
                 const coverStatus = (kvByCat[cat] || []).sort().map(n => {
-                    return n + (coverKeys.has(cat + '__' + n) ? ' ✓' : ' ✗');
+                    const has = coverKeys.has(cat + '__' + n);
+                    if (!has) noCoverList.push(cat + '__' + n);
+                    return n + (has ? ' ✓' : ' ✗');
                 });
                 lines.push('  COVER: [' + coverStatus.join(', ') + ']');
                 lines.push('  LS:    [' + (lsByCat[cat] || []).sort().join(', ') + ']');
                 lines.push('  MEM:   [' + (memByCat[cat] || []).sort().join(', ') + ']');
+                lines.push('');
             });
-            alert(lines.join('\n'));
+            // Summary: which keys have no cover in KV. This is the actionable
+            // line — those galleries will display the items[0] fallback.
+            lines.unshift('');
+            lines.unshift('--- Galleries with NO cover in KV (' + noCoverList.length + ') ---');
+            if (noCoverList.length === 0) {
+                lines.unshift('All galleries have covers saved.');
+            } else {
+                lines.unshift(noCoverList.join('\n'));
+            }
+            const text = lines.join('\n');
+            // Always log to console so the full report is grabbable even if
+            // the popup is blocked or truncated.
+            console.log('=== KV DEBUG ===\n' + text);
+            // Open the report in a new tab so it's scrollable and copyable.
+            // Falls back to alert if popup is blocked.
+            const w = window.open('', '_blank');
+            if (w) {
+                w.document.write('<title>KV Debug</title><pre style="font-family:Menlo,Monaco,monospace;font-size:13px;white-space:pre-wrap;padding:20px;line-height:1.5">' + text.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</pre>');
+                w.document.close();
+            } else {
+                alert(text);
+            }
         } catch (e) {
             alert('KV debug failed: ' + e.message);
         }
