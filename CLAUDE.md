@@ -135,15 +135,26 @@ keys that the admin recently touched on this device.
 
 - `localStorage['admin:cover']` — `{ key: timestamp }` map.
 - `localStorage['admin:delete']` — same shape, for deleted galleries.
+- `localStorage['admin:order']` — `{ catId: { order: [name,...], ts } }`
+  map for sub-gallery ordering within a category. Different shape from
+  the others (carries the full saved order, not just a timestamp)
+  because the KV value itself may not have propagated yet on reload —
+  we need the local copy of the order to apply, not just a "skip this
+  key" hint.
 - `ADMIN_WRITE_TTL_MS` = 10 minutes. After that, KV is authoritative
   again (well past the propagation window).
 - `markRecentAdmin(kind, key)` and `isRecentAdmin(kind, key)` are the
-  helpers. `pruneAdminMarks()` runs at boot to trim expired entries.
+  helpers (cover/delete only). `pruneAdminMarks()` runs at boot to
+  trim expired entries (handles all three kinds, including the
+  differently-shaped `admin:order`).
 
 **Read-side guards:**
 - `loadFromKV` skips any KV key in `isRecentAdmin('delete', key)`
 - Cover-loading skips any KV key in `isRecentAdmin('cover', key)`
   AND in the in-memory `recentlySetCovers` Set.
+- `loadGalleryOrdersFromKV` merges the `admin:order` local mirror on
+  top of the KV response so a fresh-but-stale KV read can't undo a
+  reorder the user just saved.
 
 `Reset Local Cache` admin button wipes `capsVaultCollection` and
 `capsVaultHomePhotos` BUT preserves the `admin:*` marks (so a user
@@ -358,6 +369,25 @@ Major features built (in rough order):
     localStorage kept the deleted gallery and `loadCollection`
     restored it on reload (combined with KV propagation lag, that's
     why deletes "didn't stick").
+
+### May 10, 2026 session
+
+24. **Gallery-order revert fix.** Drag-reordering home/away/alt jersey
+    galleries didn't stick across reloads. Cause: the May 6 cache
+    busters on `list-gallery-orders` exposed a KV propagation race —
+    a reload landing within ~60s of the save would fetch a stale order
+    from a different edge and `loadGalleryOrdersFromKV` would apply
+    it, undoing the change. Before May 6, browser HTTP caching of the
+    response was masking the race. Fix: added `localStorage['admin:order']`
+    mirror written by `saveGalleryOrder`, merged on top of the KV
+    response in `loadGalleryOrdersFromKV` for any catId still within
+    the 10-min TTL. Same pattern as `admin:cover`/`admin:delete` but
+    the value carries the full saved order, not just a timestamp,
+    because the saved order itself may not have propagated.
+    `pruneAdminMarks` now also sweeps the `admin:order` map.
+    `loadGalleryOrdersFromKV` also gained a `renderSubGalleryGrid()`
+    call so the new order is visible immediately if you're looking
+    at the gallery list when load completes.
 
 ## Roadmap (not yet built — Jay's interested but pending)
 
