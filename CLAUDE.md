@@ -75,6 +75,24 @@ become visible (drag handles, "Set Cover" buttons, inline-editable text
 outlines, etc.). Logout via the admin bar. Admin state is per-tab
 (no persistence) — closing the tab logs you out.
 
+The admin bar (bottom-right when logged in) has these buttons:
+
+- **SmugMug Settings** — credentials modal (already configured server-side).
+- **Reset Local Cache** — wipes `capsVaultCollection` + `capsVaultHomePhotos`
+  in localStorage and hard-reloads with a cache-buster query string.
+  Use when devices look out of sync. Preserves `admin:cover` and
+  `admin:delete` marks.
+- **KV Debug** — opens a new tab with a per-category dump of
+  `KV` (album URLs), `COVER` (with ✓/✗ for each gallery indicating
+  whether a cover is saved in KV), `LS` (localStorage), and `MEM`
+  (current `collectionData`). Top of report lists every KV key with
+  no cover.
+- **Delete KV Key** — prompts for an exact KV key (e.g.
+  `captains-autos__Captain's Autographs`) and calls `delete-gallery`.
+  Use for surgical cleanup the × button can't reach — duplicates inside
+  a singleGallery category, etc.
+- **Log Out**.
+
 ## KV schema (everything in `CAPS_VAULT_KV`)
 
 | Key pattern               | Type    | Purpose                                                                                |
@@ -88,9 +106,49 @@ outlines, etc.). Logout via the admin bar. Admin state is per-tab
 | `galleryOrders`           | JSON    | `{ catId: [playerName, playerName, ...] }` — order of sub-galleries within categories. |
 | `featured`                | JSON    | `[{src, caption, categoryId, playerName}, ...]` — Featured Pieces lineup on Home.      |
 | `texts`                   | JSON    | `{ editId: text }` — every inline-edited text on the site (bios, paragraphs, photo metadata, category intros, all of it). |
+| `stats`                   | JSON    | `{ photos, total, jerseys, equip, cards }` — last-computed home-page stat numbers, displayed instantly on page load while `loadFromKV` runs in background. Re-saved when `loadFromKV` completes. |
 
 `functions/api/smugmug.js` filters all the prefix and special keys out of
-the `list` action so the album-URL query stays clean.
+the `list` action so the album-URL query stays clean (covers, phero,
+pheropos, featured, texts, portfolioCovers, galleryOrders, portfolioOrder,
+stats).
+
+### API endpoints (all on `functions/api/smugmug.js`)
+
+Every endpoint takes `?action=<name>` and follows a `save-<thing>` /
+`list-<things>` naming convention. Notable additions:
+- `delete-gallery` (POST `{key}`) — wipes album URL, cover, phero,
+  pheropos, gallery-order entry, bio, pdetails, and any featured tile
+  pointing at the gallery in one atomic call.
+- `save-stats` / `list-stats` — home-page stats cache.
+- All `list-*` endpoints accept `&_=<timestamp>` cache-busters; client
+  appends `Date.now()` to every call so iOS Safari can't serve stale
+  responses even if HTML is cached.
+
+## Eventual consistency & admin-write protection
+
+Cloudflare KV is **eventually consistent** — propagation across edge
+locations can take up to ~60 seconds. A naive read-after-write loses
+admin choices on the next reload. To handle this, every admin write is
+mirrored to a TTL-stamped map in localStorage, and load functions skip
+keys that the admin recently touched on this device.
+
+- `localStorage['admin:cover']` — `{ key: timestamp }` map.
+- `localStorage['admin:delete']` — same shape, for deleted galleries.
+- `ADMIN_WRITE_TTL_MS` = 10 minutes. After that, KV is authoritative
+  again (well past the propagation window).
+- `markRecentAdmin(kind, key)` and `isRecentAdmin(kind, key)` are the
+  helpers. `pruneAdminMarks()` runs at boot to trim expired entries.
+
+**Read-side guards:**
+- `loadFromKV` skips any KV key in `isRecentAdmin('delete', key)`
+- Cover-loading skips any KV key in `isRecentAdmin('cover', key)`
+  AND in the in-memory `recentlySetCovers` Set.
+
+`Reset Local Cache` admin button wipes `capsVaultCollection` and
+`capsVaultHomePhotos` BUT preserves the `admin:*` marks (so a user
+clearing local cache for sync reasons doesn't lose recent-write
+protection).
 
 ## Categories
 
@@ -107,6 +165,16 @@ sub-gallery list and goes straight into the media view):
 - `captains-autos` (Captains Autographs — note: no apostrophe)
 - `autographs` (Caps Autographs)
 - `more` (More Caps Stuff)
+
+**KV is the SOLE source of truth for which galleries exist.** As of
+May 6, 2026 there are NO hardcoded gallery name arrays in the JS. To
+create a new gallery, the admin uses the "+ New Gallery" button or
+"Load from SmugMug" in the admin UI. To remove one, use the × delete
+button on the sub-gallery card (or `Delete KV Key` for one-offs that
+the × can't reach, like duplicates inside a singleGallery category).
+**Do NOT re-add hardcoded `homeJerseyNames` / `awayJerseyNames` etc
+arrays** — they cause ghost placeholder galleries that resurrect on
+every page load and can't be deleted via the × button.
 
 The category intro feature works on both: `category-intro` element shows
 on `#page-subgallery` for singleGallery categories; `category-list-intro`
@@ -179,6 +247,30 @@ that's the next obvious enhancement (would mean typing "2018" or
   filenames (e.g. "Image 5-2-26 at 9.16 PM.jpeg" has U+202F before
   "PM"). Bash glob patterns (`Image\ *`) work; explicit filename
   paths often don't. Use python or glob expansion to handle them.
+- **iOS Safari aggressive HTML caching** — handled by `_headers` file
+  at the repo root which sets `Cache-Control: no-cache, must-revalidate`
+  on `/` and `/index.html`, and `no-store` on `/api/*`. If you ever
+  remove this file, Safari users will be stuck on stale HTML for hours.
+- **Cloudflare KV is eventually consistent (~60s).** Don't read
+  immediately after a write and expect the new value globally — for
+  same-edge reads it's usually sub-second, but cross-region or after
+  a delete the list call may still return the old keys. Mitigated by
+  the `admin:cover` / `admin:delete` localStorage TTL marks (see
+  "Eventual consistency" section).
+- **`loadFromKV` MUST apply covers in its first pass.** Earlier we had
+  a separate `loadCoversFromKV()` that ran in parallel — it could
+  resolve before galleries were pushed to `collectionData`, find
+  nothing in `find(g => g.name === playerName)`, and silently drop the
+  cover. The fallback to `items[0]` then won permanently. Now
+  `loadFromKV` fetches the cover map alongside the gallery list and
+  applies them synchronously while pushing each gallery. The standalone
+  `loadCoversFromKV` function still exists but isn't called from boot.
+- **The file is ~1MB+** — direct `Read` on the whole index.html
+  exceeds token limits. Use `offset`/`limit`, `Grep`, or `awk`/`sed`
+  via bash to navigate it. The base64-embedded covers/logos/images
+  in the file (especially around lines 2880-2890 and the
+  `niskanenCover` removal area) make line-range reads blow up if
+  you span them.
 
 ## How Jay likes to work
 
@@ -220,6 +312,53 @@ Major features built (in rough order):
     jerseys/sticks/equipment; counts items for the singleGallery cards/autos
     bucket; plus a Total Pictures bucket for the raw count).
 
+### May 6, 2026 session (long session, lots fixed)
+
+13. Admin × delete button on each sub-gallery card — wipes the album URL,
+    cover, hero, hero position, gallery-order entry, bio + pdetails text
+    overrides, and any Featured tile pointing at the gallery. New
+    `delete-gallery` API endpoint.
+14. **KV is now the sole source of truth for gallery existence.** Removed
+    all four hardcoded gallery name arrays (`homeJerseyNames`,
+    `awayJerseyNames`, `altJerseyNames`, `equipmentNames`) and the
+    `niskanenCover` base64 blob. Was causing ghost placeholder galleries
+    that resurrected on every page load.
+15. **Eventual-consistency protection.** Admin writes (covers, deletes)
+    now mirror to `localStorage['admin:cover']` and
+    `localStorage['admin:delete']` with a 10-min TTL. Read paths skip
+    keys with active marks so a slow KV propagation can't undo the
+    user's choice. Survives page reloads on the same device.
+16. **loadFromKV race fix.** Was the actual bug behind "stick covers
+    keep reverting." `loadCoversFromKV` resolved before galleries were
+    pushed to `collectionData`, dropped covers silently, and the
+    fallback to `items[0]` won. Fixed by integrating cover-loading into
+    `loadFromKV`'s first pass — covers and gallery registration happen
+    in the same synchronous loop now.
+17. **Parallelized `loadFromKV`.** Was one SmugMug fetch at a time
+    sequentially. Now uses a worker pool with `CONCURRENCY = 8`. Big
+    speedup for large categories.
+18. **Home stats KV cache.** New `stats` KV key. On page load, cached
+    stats paint instantly from a single fast fetch. Re-saved when
+    `loadFromKV` finishes a full crawl. Without this, stats were "—"
+    until SmugMug crawl finished (~30s).
+19. **Cache-busters on all `list-*` API calls** (`&_=Date.now()`) plus
+    `_headers` file with `Cache-Control: no-cache, must-revalidate`
+    on HTML and `no-store` on `/api/*`. Fixes iOS Safari serving
+    stale data.
+20. **Mobile delete-button visibility.** `@media (hover: none) {
+    .sg-delete-btn { opacity: 0.95 } }` — was invisible on touch
+    devices because the rule was `:hover`-only.
+21. **Admin tools added:** Reset Local Cache, KV Debug (opens in new
+    tab, shows ✓/✗ for each gallery's cover status), Delete KV Key
+    (one-off cleanup for keys the × button can't reach).
+22. **Cover save now awaits and alerts on failure.** Previously a
+    silent `.catch` for fire-and-forget. Now the user sees a popup if
+    the API returns non-OK so silent failures are visible.
+23. **deleteSubGallery now calls saveCollection().** Without this,
+    localStorage kept the deleted gallery and `loadCollection`
+    restored it on reload (combined with KV propagation lag, that's
+    why deletes "didn't stick").
+
 ## Roadmap (not yet built — Jay's interested but pending)
 
 - **Search indexing photo metadata** (highest value next step; lets
@@ -237,6 +376,7 @@ Major features built (in rough order):
 ```
 /index.html                      ← THE WHOLE SITE (~1MB+)
 /_routes.json                    ← Pages routing (only /api/* hits Functions)
+/_headers                        ← Cache-Control headers (no-cache HTML, no-store API)
 /intro.mp3                       ← John Walton Cup call (7s)
 /functions/api/smugmug.js        ← The Pages Function (only backend)
 /functions/smugmug.js            ← Older copy, not actively used (routes
