@@ -3862,6 +3862,15 @@
     function saveGalleryOrder(catId) {
         if (!catId || !collectionData[catId]) return;
         const order = collectionData[catId].map(sg => sg.name);
+        // Mirror locally with a TTL so a quick reload after a reorder
+        // doesn't get steamrolled by a stale KV read (eventual
+        // consistency window ~60s). loadGalleryOrdersFromKV prefers
+        // the local mirror when the mark is fresh.
+        try {
+            const marks = JSON.parse(localStorage.getItem('admin:order') || '{}');
+            marks[catId] = { order, ts: Date.now() };
+            localStorage.setItem('admin:order', JSON.stringify(marks));
+        } catch (e) {}
         fetch('/api/smugmug?action=save-gallery-order', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -3915,12 +3924,27 @@
             if (!resp.ok) return;
             const data = await resp.json();
             if (!data.orders || typeof data.orders !== 'object') return;
+            // Merge in any locally-mirrored orders that are still within
+            // the admin-write TTL. KV is eventually consistent (~60s)
+            // so a reload immediately after a drag-reorder can otherwise
+            // get a stale list and undo the user's change.
+            const merged = Object.assign({}, data.orders);
+            let localMarks = {};
+            try { localMarks = JSON.parse(localStorage.getItem('admin:order') || '{}'); }
+            catch (e) {}
+            Object.keys(localMarks).forEach(catId => {
+                const m = localMarks[catId];
+                if (m && Array.isArray(m.order) && m.ts &&
+                    Date.now() - m.ts < ADMIN_WRITE_TTL_MS) {
+                    merged[catId] = m.order;
+                }
+            });
             // Apply saved orders: re-sort each category's array to match.
             // Galleries not in the saved order are appended in their
             // original positions (so newly-added galleries don't disappear).
-            Object.keys(data.orders).forEach(catId => {
+            Object.keys(merged).forEach(catId => {
                 if (!collectionData[catId]) return;
-                const order = data.orders[catId];
+                const order = merged[catId];
                 if (!Array.isArray(order)) return;
                 const byName = new Map(collectionData[catId].map(sg => [sg.name, sg]));
                 const reordered = [];
@@ -3935,6 +3959,12 @@
                 collectionData[catId] = reordered;
             });
             renderPortfolioGrid();
+            // Re-render the sub-gallery grid too if the user is currently
+            // viewing it — otherwise the visual order won't update until
+            // they navigate away and back.
+            if (typeof renderSubGalleryGrid === 'function' && currentPortfolio) {
+                renderSubGalleryGrid();
+            }
         } catch (e) {
             console.warn('Gallery orders KV load failed:', e);
         }
@@ -5062,6 +5092,20 @@
             }
             if (dirty) _saveAdminMarks(kind, map);
         });
+        // 'admin:order' has a different shape ({order, ts}) so prune separately.
+        try {
+            const orderMap = JSON.parse(localStorage.getItem('admin:order') || '{}');
+            const now = Date.now();
+            let dirty = false;
+            for (const k of Object.keys(orderMap)) {
+                const m = orderMap[k];
+                if (!m || !m.ts || now - m.ts >= ADMIN_WRITE_TTL_MS) {
+                    delete orderMap[k];
+                    dirty = true;
+                }
+            }
+            if (dirty) localStorage.setItem('admin:order', JSON.stringify(orderMap));
+        } catch (e) {}
     }
     pruneAdminMarks();
 
