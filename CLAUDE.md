@@ -389,6 +389,21 @@ Major features built (in rough order):
     call so the new order is visible immediately if you're looking
     at the gallery list when load completes.
 
+25. **Gallery-order race in fresh browsers (incognito / first visit).**
+    Initial fix above only helped the admin's own browser. In a fresh
+    browser, `loadCollection()` finds nothing in localStorage so
+    `collectionData[catId]` starts empty. `loadGalleryOrdersFromKV`
+    only has one fetch (vs `loadFromKV`'s `Promise.all` of two), so
+    it resolved FIRST — tried to reorder an empty array — did
+    nothing — then `loadFromKV` pushed galleries in KV `list()`
+    alphabetical order. Visitors saw alphabetical, not the admin's
+    chosen order. Fix: `loadFromKV` now awaits `loadGalleryOrdersFromKV()`
+    at the end of its first pass (after pushing every gallery into
+    `collectionData`), and the standalone boot call to
+    `loadGalleryOrdersFromKV` was removed. Same pattern as the
+    May 6 cover-race fix — order-application moved inside
+    `loadFromKV` to guarantee ordering against fresh state.
+
 ## Roadmap (not yet built — Jay's interested but pending)
 
 - **Search indexing photo metadata** (highest value next step; lets

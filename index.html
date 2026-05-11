@@ -4842,6 +4842,15 @@
                 if (sg.items.length === 0) fetchTasks.push({ sg, albumUrl, playerName });
             }
 
+            // Apply saved gallery order NOW that every gallery is in
+            // collectionData. Doing this before the SmugMug fetches means
+            // the grid renders in the correct order from the very first
+            // paint. Critical for fresh browsers (incognito / first-time
+            // visitors) where localStorage is empty and collectionData
+            // would otherwise stay in KV-list (alphabetical) order if
+            // loadGalleryOrdersFromKV ran while collectionData was empty.
+            await loadGalleryOrdersFromKV();
+
             // Second pass: kick off SmugMug fetches in parallel batches.
             // Cap concurrency at 8 — fast enough to feel snappy, low enough
             // to not exceed SmugMug rate limits or saturate mobile networks.
@@ -5140,15 +5149,16 @@
     // Cached stats first — paints the numbers instantly so the home page
     // isn't blank while loadFromKV() spins through SmugMug fetches.
     loadStatsFromKV();
-    // loadFromKV now also applies covers in its first pass, so we no
-    // longer call loadCoversFromKV() here — it raced with loadFromKV
-    // and silently dropped covers when collectionData wasn't populated
-    // yet. Function definition retained for any future on-demand use.
+    // loadFromKV now also applies covers AND gallery orders in its
+    // first pass, so we no longer call loadCoversFromKV() or
+    // loadGalleryOrdersFromKV() here — both raced with loadFromKV and
+    // silently lost their writes when collectionData wasn't populated
+    // yet (fresh browser / incognito). Function definitions retained
+    // for any future on-demand use.
     loadFromKV();
     loadPortfolioCoversFromKV();
     loadFeaturedFromKV();
     loadTextsFromKV();
-    loadGalleryOrdersFromKV();
     loadPortfolioOrderFromKV();
     loadPlayerHerosFromKV();
     renderPortfolioGrid();
