@@ -389,6 +389,22 @@ Major features built (in rough order):
     call so the new order is visible immediately if you're looking
     at the gallery list when load completes.
 
+25a. **Inline-edit broke after login because of an unrelated throw.**
+    Symptom: admin-mode gold outline showed on hover, but text wasn't
+    contentEditable. Cause: `tryLogin()` unconditionally calls
+    `renderMediaGrid()` and `renderSubGalleryGrid()` AFTER setting
+    `admin-mode` but BEFORE `enableTextEditing()`. Both renderers
+    dereferenced `collectionData[currentPortfolio][currentSubGalleryIndex]`
+    /`collectionData[currentPortfolio]` without guards. If the admin
+    logged in while not inside a specific subgallery (e.g. from the
+    home page or the gallery list), the index lookup returned
+    `undefined`, then `sg.items.forEach` threw "undefined is not an
+    object (evaluating 'sg.items')". The throw aborted tryLogin —
+    `enableTextEditing()` never ran, so the existing CSS outline
+    appeared on hover but contenteditable was never applied. Fix:
+    both renderers now bail early if `currentPortfolio`/
+    `currentSubGalleryIndex` are null or the lookups don't resolve.
+
 25. **Gallery-order race in fresh browsers (incognito / first visit).**
     Initial fix above only helped the admin's own browser. In a fresh
     browser, `loadCollection()` finds nothing in localStorage so

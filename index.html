@@ -3031,8 +3031,14 @@
     }
 
     function renderSubGalleryGrid() {
+        // Guard: tryLogin() calls this on any page. If no category is
+        // active yet (currentPortfolio == null), there's nothing to
+        // render. Without this, the next line throws on the null index
+        // and aborts the rest of login setup (e.g. enableTextEditing).
+        if (currentPortfolio == null || !collectionData[currentPortfolio]) return;
         const galleries = collectionData[currentPortfolio];
         const grid = document.getElementById('subgallery-grid');
+        if (!grid) return;
         // Admin gets draggable tiles for reordering. The drag handlers
         // read the index from data-sg-index on the dragged element.
         let html = galleries.map((sg, i) => `
@@ -3318,7 +3324,16 @@
     }
 
     function renderMediaGrid() {
-        const sg = collectionData[currentPortfolio][currentSubGalleryIndex];
+        // Guard: called from tryLogin() whenever the admin logs in, which
+        // can happen on any page. If we're not currently inside a specific
+        // sub-gallery (currentSubGalleryIndex == null), there's nothing to
+        // render — bail before dereferencing undefined. Without this
+        // guard, `sg.items.forEach` throws a TypeError that aborts the
+        // rest of tryLogin (notably enableTextEditing), leaving the
+        // inline-edit outlines visible on hover but text uneditable.
+        if (currentPortfolio == null || currentSubGalleryIndex == null) return;
+        const sg = collectionData[currentPortfolio] && collectionData[currentPortfolio][currentSubGalleryIndex];
+        if (!sg || !Array.isArray(sg.items)) return;
         const grid = document.getElementById('media-grid');
         grid.innerHTML = '';
 
