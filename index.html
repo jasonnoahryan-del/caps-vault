@@ -2220,6 +2220,21 @@
         filter: brightness(1.08);
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
     }
+    /* Admin drag-and-drop reorder visual feedback. */
+    .admin-mode .about-collage-side img {
+        cursor: grab;
+    }
+    .admin-mode .about-collage-side img:active {
+        cursor: grabbing;
+    }
+    .about-collage-side img.dragging {
+        opacity: 0.4;
+        outline: 2px solid var(--caps-red);
+    }
+    .about-collage-side img.drag-over {
+        outline: 2px solid var(--caps-gold, #B8960C);
+        outline-offset: 2px;
+    }
     .about-text-center {
         padding: 12px 4px;
     }
@@ -2462,15 +2477,7 @@
     <!-- ABOUT PAGE — text in the middle, photos in 2-column masonry on each side. -->
     <div id="page-about" class="page">
         <section class="about-layout">
-            <div class="about-collage-side about-collage-left">
-                <img src="/images/about-1.jpg" alt="">
-                <img src="/images/about-2.jpg" alt="">
-                <img src="/images/about-3.jpg" alt="">
-                <img src="/images/about-4.jpg" alt="">
-                <img src="/images/about-5.jpg" alt="">
-                <img src="/images/about-6.jpg" alt="">
-                <img src="/images/about-7.jpg" alt="">
-            </div>
+            <div class="about-collage-side about-collage-left" id="about-collage-left"></div>
             <div class="about-text-center content-page">
                 <h1>About the Collection</h1>
                 <div class="red-line"></div>
@@ -2489,16 +2496,7 @@
                     </div>
                 </div>
             </div>
-            <div class="about-collage-side about-collage-right">
-                <img src="/images/about-8.jpg" alt="">
-                <img src="/images/about-9.jpg" alt="">
-                <img src="/images/about-10.jpg" alt="">
-                <img src="/images/about-11.jpg" alt="">
-                <img src="/images/about-12.jpg" alt="">
-                <img src="/images/about-13.jpg" alt="">
-                <img src="/images/about-14.jpg" alt="">
-                <img src="/images/about-15.jpg" alt="">
-            </div>
+            <div class="about-collage-side about-collage-right" id="about-collage-right"></div>
         </section>
     </div>
 
@@ -3783,6 +3781,123 @@
             openSearch();
         }
     });
+
+    // ── ABOUT-PAGE COLLAGE: RENDER + DRAG-AND-DROP REORDER ──
+    // 15 personal photos at /images/about-1.jpg through about-15.jpg.
+    // Admin can rearrange via drag/drop; the order persists in KV under
+    // `aboutPhotoOrder` so every visitor sees the same layout. First 7
+    // entries of the order render in the left collage column; the
+    // remaining 8 render in the right. Drag from one side to the other
+    // by dropping past the split.
+    const ABOUT_PHOTO_COUNT = 15;
+    const ABOUT_LEFT_COUNT = 7; // first N go left, rest go right
+    // Default ordering is just 1..N. Replaced by KV when loaded.
+    let aboutPhotoOrder = Array.from({ length: ABOUT_PHOTO_COUNT }, (_, i) => i + 1);
+
+    function renderAboutCollage() {
+        const leftEl  = document.getElementById('about-collage-left');
+        const rightEl = document.getElementById('about-collage-right');
+        if (!leftEl || !rightEl) return;
+        const dragAttrs = isAdmin
+            ? ` draggable="true" ondragstart="aboutDragStart(event)" ondragover="aboutDragOver(event)" ondrop="aboutDrop(event)" ondragend="aboutDragEnd(event)" ondragenter="aboutDragEnter(event)" ondragleave="aboutDragLeave(event)"`
+            : '';
+        const imgHtml = (photoNum, idx) =>
+            `<img src="/images/about-${photoNum}.jpg" alt="" data-about-idx="${idx}"${dragAttrs}>`;
+        const left  = aboutPhotoOrder.slice(0, ABOUT_LEFT_COUNT).map((n, i) => imgHtml(n, i)).join('');
+        const right = aboutPhotoOrder.slice(ABOUT_LEFT_COUNT).map((n, i) => imgHtml(n, i + ABOUT_LEFT_COUNT)).join('');
+        leftEl.innerHTML  = left;
+        rightEl.innerHTML = right;
+    }
+
+    let aboutDragSrcIndex = null;
+    function aboutDragStart(e) {
+        const img = e.target.closest('img[data-about-idx]');
+        if (!img) return;
+        aboutDragSrcIndex = parseInt(img.dataset.aboutIdx, 10);
+        img.classList.add('dragging');
+        try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(aboutDragSrcIndex)); } catch (_) {}
+    }
+    function aboutDragOver(e) {
+        if (aboutDragSrcIndex == null) return;
+        e.preventDefault();
+        try { e.dataTransfer.dropEffect = 'move'; } catch (_) {}
+    }
+    function aboutDragEnter(e) {
+        const img = e.target.closest('img[data-about-idx]');
+        if (!img) return;
+        img.classList.add('drag-over');
+    }
+    function aboutDragLeave(e) {
+        const img = e.target.closest('img[data-about-idx]');
+        if (!img) return;
+        img.classList.remove('drag-over');
+    }
+    function aboutDrop(e) {
+        e.preventDefault();
+        const targetImg = e.target.closest('img[data-about-idx]');
+        document.querySelectorAll('.about-collage-side img.drag-over').forEach(el => el.classList.remove('drag-over'));
+        const srcIdx = aboutDragSrcIndex;
+        aboutDragSrcIndex = null;
+        if (!targetImg || srcIdx == null) return;
+        const dstIdx = parseInt(targetImg.dataset.aboutIdx, 10);
+        if (isNaN(dstIdx) || srcIdx === dstIdx) return;
+        // Move the photo at srcIdx to dstIdx within the flat order.
+        const [moved] = aboutPhotoOrder.splice(srcIdx, 1);
+        aboutPhotoOrder.splice(dstIdx, 0, moved);
+        renderAboutCollage();
+        saveAboutOrder();
+    }
+    function aboutDragEnd(e) {
+        aboutDragSrcIndex = null;
+        document.querySelectorAll('.about-collage-side img.dragging,.about-collage-side img.drag-over')
+            .forEach(el => el.classList.remove('dragging', 'drag-over'));
+    }
+
+    function saveAboutOrder() {
+        const order = aboutPhotoOrder.slice();
+        // localStorage TTL mirror — KV is eventually consistent, so a quick
+        // reload after a drag could otherwise see a stale list.
+        try {
+            localStorage.setItem('admin:aboutOrder', JSON.stringify({ order, ts: Date.now() }));
+        } catch (e) {}
+        fetch('/api/smugmug?action=save-about-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order })
+        }).catch(e => console.warn('About order sync failed:', e));
+    }
+
+    async function loadAboutOrderFromKV() {
+        try {
+            const resp = await fetch('/api/smugmug?action=list-about-order&_=' + Date.now());
+            if (!resp.ok) return;
+            const data = await resp.json();
+            let order = Array.isArray(data && data.order) ? data.order : null;
+            // Prefer the local mirror if it's still within TTL — same
+            // pattern as gallery orders & covers/deletes.
+            try {
+                const localRaw = localStorage.getItem('admin:aboutOrder');
+                if (localRaw) {
+                    const local = JSON.parse(localRaw);
+                    if (local && Array.isArray(local.order) && local.ts &&
+                        Date.now() - local.ts < ADMIN_WRITE_TTL_MS) {
+                        order = local.order;
+                    }
+                }
+            } catch (e) {}
+            if (!order) return;
+            // Sanity-check: only keep valid photo numbers (1..N), then
+            // append any missing photos at the end so a partial KV entry
+            // doesn't drop photos from the page entirely.
+            const valid = order.filter(n => Number.isInteger(n) && n >= 1 && n <= ABOUT_PHOTO_COUNT);
+            const seen = new Set(valid);
+            for (let n = 1; n <= ABOUT_PHOTO_COUNT; n++) if (!seen.has(n)) valid.push(n);
+            aboutPhotoOrder = valid;
+            renderAboutCollage();
+        } catch (e) {
+            console.warn('About order KV load failed:', e);
+        }
+    }
 
     // ── PORTFOLIO (BROWSE PAGE) DRAG-AND-DROP REORDERING ──
     // Admin can drag the category tiles on the Browse page to reorder
@@ -5250,6 +5365,8 @@
     loadTextsFromKV();
     loadPortfolioOrderFromKV();
     loadPlayerHerosFromKV();
+    renderAboutCollage();      // paint with defaults so visitors see images instantly
+    loadAboutOrderFromKV();    // then apply the saved order from KV
     renderPortfolioGrid();
     renderHomeGrid();
 
@@ -5350,6 +5467,7 @@
             renderSubGalleryGrid && renderSubGalleryGrid();
             renderHomeGrid();
             renderPortfolioGrid();
+            renderAboutCollage();
             enableTextEditing();
             // If a player gallery is currently shown, re-render its bio so
             // the inline editor binds to the bio paragraph too.
@@ -5370,6 +5488,7 @@
         renderSubGalleryGrid && renderSubGalleryGrid();
         renderHomeGrid();
         renderPortfolioGrid();
+        renderAboutCollage();
     }
     </script>
 
