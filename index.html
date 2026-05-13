@@ -716,6 +716,24 @@
         padding: 32px
     }
 
+    /* Card-style categories (game-used cards, autographed cards, captains
+       autographs, caps autographs) — bigger cells with a vertical-friendly
+       aspect ratio and object-fit: contain so vertical trading cards aren't
+       cropped or shrunken. Set by openSubGallery and cleared on nav away. */
+    body.card-layout .media-grid {
+        grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+        gap: 20px;
+    }
+    body.card-layout .media-item-thumb {
+        aspect-ratio: 3 / 4;
+        background: rgba(4, 30, 66, 0.55);
+        padding: 10px;
+    }
+    body.card-layout .media-item-thumb img,
+    body.card-layout .media-item-thumb video {
+        object-fit: contain;
+    }
+
     .media-item {
         background: var(--caps-dark);
         border: 1px solid rgba(255, 255, 255, 0.06);
@@ -2972,6 +2990,9 @@
                 name: name
             }, '', '#' + name);
         }
+        // Leaving the sub-gallery view — drop the card-layout class so the
+        // larger-cell styling doesn't bleed into other pages.
+        document.body.classList.remove('card-layout');
         // Always scroll to the top so each page starts at its hero/header
         // instead of whatever scroll position the previous page left behind.
         window.scrollTo(0, 0);
@@ -3030,6 +3051,9 @@
                 id: id
             }, '', '#browse/' + id);
         }
+        // Sub-gallery list view (not the media view) — strip the card-layout
+        // class in case we got here from a card category.
+        document.body.classList.remove('card-layout');
         window.scrollTo(0, 0);
     }
 
@@ -3236,6 +3260,11 @@
         renderMediaGrid();
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         document.getElementById('page-subgallery').classList.add('active');
+        // Card-style categories (trading cards & autographs) use larger
+        // cells with a taller aspect ratio so vertical cards aren't cropped
+        // and small. The body class drives CSS that overrides .media-grid.
+        const cardCats = ['cards', 'autographed-cards', 'captains-autos', 'autographs'];
+        document.body.classList.toggle('card-layout', cardCats.includes(currentPortfolio));
         if (!fromHistory) {
             history.pushState({
                 view: 'subgallery',
