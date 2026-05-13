@@ -733,6 +733,17 @@
     body.card-layout .media-item-thumb video {
         object-fit: contain;
     }
+    /* Bigger, more readable caption in card galleries so descriptions
+       (year, set, parallel, autograph type, etc.) are easy to scan. */
+    body.card-layout .media-item-info p {
+        font-size: 13px;
+        color: #cdd1d8;
+        line-height: 1.5;
+    }
+    body.card-layout .media-item-info .media-item-year {
+        color: var(--caps-red);
+        font-weight: 600;
+    }
 
     .media-item {
         background: var(--caps-dark);
@@ -3376,6 +3387,22 @@
             el.draggable = isAdmin;
             el.dataset.index = i;
             const isCover = sg.cover && (sg.cover === item.thumbUrl || sg.cover === item.src);
+            // Use the same photoId scheme the lightbox uses so edits made
+            // in the grid and edits made in the lightbox write to the
+            // same KV `texts` key and stay in sync.
+            const photoId = item.webUri || item.largeUrl || item.src || ('idx:' + currentPortfolio + ':' + currentSubGalleryIndex + ':' + i);
+            const notesKey = 'photo-notes:' + photoId;
+            const yearKey  = 'photo-year:'  + photoId;
+            const notesText = textOverrides[notesKey] != null ? textOverrides[notesKey] : (item.notes || '');
+            const yearText  = textOverrides[yearKey]  != null ? textOverrides[yearKey]  : (item.year  || '');
+            // Visitors see a combined "year · notes" caption only when
+            // something is set. Admins always see the editable notes field
+            // (plus the year prefix when one exists) so they can add or
+            // change a caption inline without opening the lightbox.
+            const visitorCaption = (yearText || notesText)
+                ? `<p>${[yearText, notesText].filter(Boolean).join(' · ')}</p>`
+                : '';
+            const adminCaption = `<p class="media-item-caption">${yearText ? `<span class="media-item-year">${yearText} · </span>` : ''}<span class="media-item-notes" data-edit-id="${notesKey}">${notesText}</span></p>`;
             el.innerHTML = `
       <div class="media-item-thumb">
         ${
@@ -3384,9 +3411,7 @@
         ${isCover ? '<span style="position:absolute;bottom:6px;left:6px;background:rgba(200,16,46,0.9);font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1px;text-transform:uppercase;padding:3px 7px;color:#fff">★ Cover</span>' : ''}
       </div>
       <div class="media-item-info">
-        ${
-
-            item.notes || item.year ? `<p>${[item.year, item.notes].filter(Boolean).join(' · ')}</p>` : ''}
+        ${isAdmin ? adminCaption : visitorCaption}
         ${isAdmin ? `<div style="display:flex;gap:6px;margin-top:8px">
           <button data-cover-btn="${i}" onclick="event.stopPropagation();setCoverPhoto(${i})" style="flex:1;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:5px;background:rgba(4,30,66,0.8);color:#aaa;border:1px solid rgba(255,255,255,0.15);cursor:pointer">⊙ Set Cover</button>
           <button onclick="event.stopPropagation();deleteMediaItem(${i})" style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:5px 8px;background:rgba(200,16,46,0.15);color:#c8102e;border:1px solid rgba(200,16,46,0.3);cursor:pointer">✕</button>
@@ -3394,8 +3419,24 @@
       </div>`
             ;
 
+            // Wire up the inline caption editor for admin. markEditable
+            // binds blur/keydown, contentEditable, etc. Clicks on the
+            // editor must not bubble up to the .media-item handler below
+            // (which would open the lightbox and lose the cursor).
+            if (isAdmin) {
+                const notesEl = el.querySelector('.media-item-notes');
+                if (notesEl) {
+                    markEditable(notesEl);
+                    notesEl.addEventListener('click', e => e.stopPropagation());
+                }
+            }
+
             el.addEventListener('click', (e) => {
                 if (e.target.classList.contains('drag-handle'))
+                    return;
+                // Don't open the lightbox if the click was on the caption
+                // area — the admin is likely trying to edit it.
+                if (e.target.closest('.media-item-info'))
                     return;
                 openLightbox(i);
             });
