@@ -2972,6 +2972,9 @@
                 name: name
             }, '', '#' + name);
         }
+        // Always scroll to the top so each page starts at its hero/header
+        // instead of whatever scroll position the previous page left behind.
+        window.scrollTo(0, 0);
     }
 
     // ── PORTFOLIO (category) GRID ──
@@ -3027,6 +3030,7 @@
                 id: id
             }, '', '#browse/' + id);
         }
+        window.scrollTo(0, 0);
     }
 
     function renderSubGalleryGrid() {
@@ -3239,6 +3243,7 @@
                 index: i
             }, '', '#browse/' + currentPortfolio + '/' + i);
         }
+        window.scrollTo(0, 0);
     }
 
     function goBackToCategory() {
