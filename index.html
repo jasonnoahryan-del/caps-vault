@@ -5043,7 +5043,17 @@
                 if (kvCover && !sg.cover && !recentlySetCovers.has(key) && !isRecentAdmin('cover', key)) {
                     sg.cover = kvCover;
                 }
-                if (sg.items.length === 0) fetchTasks.push({ sg, albumUrl, playerName });
+                // Always re-fetch SmugMug for single-gallery categories
+                // (cards, autographs, captains-autos, more, etc.) so any
+                // photos added directly inside SmugMug show up for every
+                // visitor on next page load — not just first-time visitors
+                // with an empty localStorage. For multi-gallery categories
+                // (jerseys/sticks/etc.) the admin adds whole new sub-
+                // galleries instead, so the cache-when-empty behavior is
+                // still right there.
+                const portfolio = portfolios.find(p => p.id === catId);
+                const alwaysRefresh = !!(portfolio && portfolio.singleGallery);
+                if (sg.items.length === 0 || alwaysRefresh) fetchTasks.push({ sg, albumUrl, playerName });
             }
 
             // Apply saved gallery order NOW that every gallery is in
@@ -5104,6 +5114,18 @@
             if (typeof renderSubGalleryGrid === 'function' && currentPortfolio) {
                 renderSubGalleryGrid();
             }
+            // If the user is sitting on a media view (e.g. one of the
+            // single-gallery card categories that just got a fresh fetch),
+            // redraw the grid so new photos appear without requiring them
+            // to navigate away and back.
+            if (currentPortfolio != null && currentSubGalleryIndex != null &&
+                document.getElementById('page-subgallery')?.classList.contains('active')) {
+                renderMediaGrid();
+            }
+            // Persist the fresh data so the next page load paints
+            // up-to-date photos from localStorage before SmugMug even
+            // gets re-queried.
+            saveCollection();
             kvFullyLoaded = true;
             saveStatsToKV();
         } catch (e) {
