@@ -4142,8 +4142,8 @@
     // entries of the order render in the left collage column; the
     // remaining 8 render in the right. Drag from one side to the other
     // by dropping past the split.
-    const ABOUT_PHOTO_COUNT = 19;
-    const ABOUT_LEFT_COUNT = 9; // first N go left, rest go right
+    const ABOUT_PHOTO_COUNT = 23;
+    const ABOUT_LEFT_COUNT = 9; // first N go left, rest go right (weighted right so new photos fall below the YouTube link)
     // Default ordering is just 1..N. Replaced by KV when loaded.
     let aboutPhotoOrder = Array.from({ length: ABOUT_PHOTO_COUNT }, (_, i) => i + 1);
 
