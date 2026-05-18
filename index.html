@@ -2294,6 +2294,17 @@
         column-count: 2;
         column-gap: 6px;
     }
+    /* Middle column collage is wider than the side ones, so give it more
+       sub-columns to keep individual photos a similar visual size. */
+    .about-collage-middle {
+        column-count: 3;
+    }
+    @media (max-width: 1100px) {
+        .about-collage-middle { column-count: 3; }
+    }
+    @media (max-width: 700px) {
+        .about-collage-middle { column-count: 2; }
+    }
     .about-collage-side img {
         width: 100%;
         height: auto;
@@ -2585,6 +2596,9 @@
                         </div>
                     </div>
                 </div>
+                <!-- Middle-column photo collage, sits underneath the YouTube
+                     link to fill the empty space alongside the right column. -->
+                <div class="about-collage-side about-collage-middle" id="about-collage-middle" style="margin-top:16px"></div>
             </div>
             <div class="about-collage-side about-collage-right" id="about-collage-right"></div>
         </section>
@@ -4143,22 +4157,34 @@
     // remaining 8 render in the right. Drag from one side to the other
     // by dropping past the split.
     const ABOUT_PHOTO_COUNT = 23;
-    const ABOUT_LEFT_COUNT = 9; // first N go left, rest go right (weighted right so new photos fall below the YouTube link)
+    // The flat order array is split into three sections so it fills all
+    // three columns of the About page collage:
+    //   - first ABOUT_LEFT_COUNT entries go left
+    //   - next ABOUT_MIDDLE_COUNT entries go in the middle, beneath the
+    //     YouTube link, filling the otherwise-empty space
+    //   - the remainder goes right
+    const ABOUT_LEFT_COUNT   = 8;
+    const ABOUT_MIDDLE_COUNT = 7;
     // Default ordering is just 1..N. Replaced by KV when loaded.
     let aboutPhotoOrder = Array.from({ length: ABOUT_PHOTO_COUNT }, (_, i) => i + 1);
 
     function renderAboutCollage() {
-        const leftEl  = document.getElementById('about-collage-left');
-        const rightEl = document.getElementById('about-collage-right');
+        const leftEl   = document.getElementById('about-collage-left');
+        const middleEl = document.getElementById('about-collage-middle');
+        const rightEl  = document.getElementById('about-collage-right');
         if (!leftEl || !rightEl) return;
         const dragAttrs = isAdmin
             ? ` draggable="true" ondragstart="aboutDragStart(event)" ondragover="aboutDragOver(event)" ondrop="aboutDrop(event)" ondragend="aboutDragEnd(event)" ondragenter="aboutDragEnter(event)" ondragleave="aboutDragLeave(event)"`
             : '';
         const imgHtml = (photoNum, idx) =>
             `<img src="/images/about-${photoNum}.jpg" alt="" data-about-idx="${idx}"${dragAttrs}>`;
-        const left  = aboutPhotoOrder.slice(0, ABOUT_LEFT_COUNT).map((n, i) => imgHtml(n, i)).join('');
-        const right = aboutPhotoOrder.slice(ABOUT_LEFT_COUNT).map((n, i) => imgHtml(n, i + ABOUT_LEFT_COUNT)).join('');
-        leftEl.innerHTML  = left;
+        const midStart  = ABOUT_LEFT_COUNT;
+        const rightStart = ABOUT_LEFT_COUNT + ABOUT_MIDDLE_COUNT;
+        const left   = aboutPhotoOrder.slice(0, midStart).map((n, i) => imgHtml(n, i)).join('');
+        const middle = aboutPhotoOrder.slice(midStart, rightStart).map((n, i) => imgHtml(n, i + midStart)).join('');
+        const right  = aboutPhotoOrder.slice(rightStart).map((n, i) => imgHtml(n, i + rightStart)).join('');
+        leftEl.innerHTML = left;
+        if (middleEl) middleEl.innerHTML = middle;
         rightEl.innerHTML = right;
     }
 
