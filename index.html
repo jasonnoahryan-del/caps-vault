@@ -708,6 +708,89 @@
     @media (hover: none) {
         .sg-delete-btn { opacity: 0.95; }
     }
+
+    /* ── COVER POSITION EDITOR ── admin-only on each sub-gallery card. */
+    .sg-pos-btn {
+        position: absolute;
+        top: 6px;
+        left: 6px;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.75);
+        border: 1px solid var(--caps-gold, #B8960C);
+        color: var(--caps-white);
+        font-size: 14px;
+        line-height: 1;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 5;
+        opacity: 0;
+        transition: opacity 0.15s, background 0.15s;
+        padding: 0;
+        -webkit-tap-highlight-color: rgba(184,150,12,0.4);
+    }
+    .subgallery-card:hover .sg-pos-btn { opacity: 1; }
+    .sg-pos-btn:hover { background: var(--caps-gold, #B8960C); }
+    @media (hover: none) {
+        .sg-pos-btn { opacity: 0.95; }
+    }
+    .subgallery-card.sg-positioning {
+        outline: 3px solid var(--caps-gold, #B8960C);
+        outline-offset: -3px;
+    }
+    .subgallery-card.sg-positioning .subgallery-card-img img {
+        cursor: grab;
+    }
+    .subgallery-card.sg-positioning .subgallery-card-img img:active {
+        cursor: grabbing;
+    }
+    /* Zoom / reset / done controls — only visible while the card is in
+       position mode. Sit along the bottom of the cover image area. */
+    .sg-pos-controls {
+        position: absolute;
+        bottom: 6px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: none;
+        gap: 4px;
+        z-index: 6;
+        background: rgba(0, 0, 0, 0.78);
+        padding: 4px 6px;
+        border-radius: 14px;
+        border: 1px solid rgba(184, 150, 12, 0.6);
+    }
+    .subgallery-card.sg-positioning .sg-pos-controls { display: flex; }
+    .sg-zoom-btn,
+    .sg-pos-reset,
+    .sg-pos-done {
+        font-family: 'Oswald', sans-serif;
+        font-size: 11px;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: #fff;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        padding: 4px 8px;
+        border-radius: 12px;
+        cursor: pointer;
+        line-height: 1;
+    }
+    .sg-zoom-btn { width: 28px; padding: 4px 0; font-size: 14px; font-weight: 700; }
+    .sg-pos-reset:hover,
+    .sg-pos-done:hover,
+    .sg-zoom-btn:hover { background: rgba(184, 150, 12, 0.4); }
+    .sg-pos-done { background: var(--caps-red); border-color: var(--caps-red); }
+    .sg-pos-done:hover { background: #a00e26; }
+    /* Disable transitions on the image during positioning so pan feels
+       instant — without this the transform animation lags the drag. */
+    .subgallery-card.sg-positioning .subgallery-card-img img {
+        transition: none;
+    }
+
     /* MEDIA GRID inside a sub-gallery */
     .media-grid {
         display: grid;
@@ -3066,6 +3149,27 @@
         window.scrollTo(0, 0);
     }
 
+    // Cover-photo position/zoom state for each sub-gallery card. Keyed by
+    // "<catId>__<playerName>". Values are { x, y, scale } where x and y
+    // are 0..100 (CSS object-position percentages) and scale is the CSS
+    // transform scale factor (>=1; <1 doesn't make sense with object-fit:
+    // cover since the image already fills the cell). Loaded from KV at
+    // boot and reapplied on every renderSubGalleryGrid.
+    let subgalleryCoverPositions = {};
+
+    function getCoverPosCss(catId, sg) {
+        const key = catId + '__' + sg.name;
+        const p = subgalleryCoverPositions[key];
+        if (!p) return { objectPosition: 'center top', transform: '' };
+        const x = Number.isFinite(p.x) ? p.x : 50;
+        const y = Number.isFinite(p.y) ? p.y : 0;
+        const s = Number.isFinite(p.scale) && p.scale > 0 ? p.scale : 1;
+        return {
+            objectPosition: x.toFixed(1) + '% ' + y.toFixed(1) + '%',
+            transform: s === 1 ? '' : `scale(${s.toFixed(3)})`
+        };
+    }
+
     function renderSubGalleryGrid() {
         // Guard: tryLogin() calls this on any page. If no category is
         // active yet (currentPortfolio == null), there's nothing to
@@ -3077,19 +3181,29 @@
         if (!grid) return;
         // Admin gets draggable tiles for reordering. The drag handlers
         // read the index from data-sg-index on the dragged element.
-        let html = galleries.map((sg, i) => `
+        let html = galleries.map((sg, i) => {
+            const css = getCoverPosCss(currentPortfolio, sg);
+            const imgStyle = `object-position:${css.objectPosition};${css.transform ? `transform:${css.transform};transform-origin:center center;` : ''}`;
+            return `
     <div class="subgallery-card" data-sg-index="${i}" onclick="openSubGallery(${i})"${
             isAdmin ? ` draggable="true" ondragstart="sgDragStart(event)" ondragover="sgDragOver(event)" ondrop="sgDrop(event)" ondragend="sgDragEnd(event)" ondragenter="sgDragEnter(event)" ondragleave="sgDragLeave(event)"` : ''}>
       <div class="subgallery-card-img">
         ${
-        sg.cover ? `<img src="${sg.cover}" alt="${sg.name}">` : `<span style="font-size:48px;opacity:0.2">🏒</span>`}
+        sg.cover ? `<img src="${sg.cover}" alt="${sg.name}" style="${imgStyle}">` : `<span style="font-size:48px;opacity:0.2">🏒</span>`}
+        ${isAdmin && sg.cover ? `<button type="button" class="sg-pos-btn" title="Position the cover photo" onclick="event.stopPropagation();toggleCoverPositionMode(${i})">⤢</button>
+        <div class="sg-pos-controls" onclick="event.stopPropagation()">
+          <button type="button" class="sg-zoom-btn" title="Zoom out" onclick="event.stopPropagation();adjustCoverZoom(${i}, -1)">−</button>
+          <button type="button" class="sg-zoom-btn" title="Zoom in" onclick="event.stopPropagation();adjustCoverZoom(${i}, 1)">+</button>
+          <button type="button" class="sg-pos-reset" title="Reset position" onclick="event.stopPropagation();resetCoverPosition(${i})">Reset</button>
+          <button type="button" class="sg-pos-done" title="Done" onclick="event.stopPropagation();exitCoverPositionMode(${i})">Done</button>
+        </div>` : ''}
         ${isAdmin ? `<button type="button" class="sg-delete-btn" title="Delete this gallery" onclick="event.stopPropagation();deleteSubGallery(${i})">×</button>` : ''}
       </div>
       <div class="subgallery-card-label">${
         sg.name}</div>
       <div class="subgallery-card-count">${sg.items.length} items</div>
-    </div>`
-        ).join('');
+    </div>`;
+        }).join('');
         if (isAdmin)
             html += `<div class="subgallery-card add-subgallery-tile" onclick="openAddSubGalleryModal()">
     <div class="subgallery-card-img">
@@ -3779,6 +3893,231 @@
         if ((e.key === '/' && !inField) || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k')) {
             e.preventDefault();
             openSearch();
+        }
+    });
+
+    // ── SUB-GALLERY COVER POSITION/ZOOM EDITOR ──
+    // Admin clicks the "⤢" button on a sub-gallery card to enter "position
+    // mode" for that card. The card gets a gold outline and shows
+    // +/- zoom buttons, a Reset, and a Done button. While in mode:
+    //   - mouse-drag on the image pans (changes object-position percentages)
+    //   - mouse-wheel / pinch zooms (changes transform: scale)
+    //   - the card's normal click handler is suppressed so navigating
+    //     into the gallery doesn't happen on every drop
+    // On exit (button or Escape), the final position is saved to KV under
+    // sgcoverPositions[<catId>__<player>] = { x, y, scale }.
+    let coverPosModeCard = null; // currently-positioning card DOM element
+    let coverPosKey      = null; // currently-positioning key string
+    const COVER_MIN_SCALE = 1.0;
+    const COVER_MAX_SCALE = 3.0;
+    const COVER_SCALE_STEP = 0.1;
+
+    function toggleCoverPositionMode(i) {
+        if (!isAdmin) return;
+        const cards = document.querySelectorAll('#subgallery-grid .subgallery-card');
+        const card  = cards[i];
+        if (!card) return;
+        if (card.classList.contains('sg-positioning')) {
+            exitCoverPositionMode(i);
+        } else {
+            enterCoverPositionMode(i);
+        }
+    }
+
+    function enterCoverPositionMode(i) {
+        const cards = document.querySelectorAll('#subgallery-grid .subgallery-card');
+        const card  = cards[i];
+        if (!card) return;
+        // Only one card in position mode at a time. Exit any other.
+        document.querySelectorAll('.subgallery-card.sg-positioning').forEach(c => {
+            c.classList.remove('sg-positioning');
+        });
+        const sg = collectionData[currentPortfolio][i];
+        coverPosModeCard = card;
+        coverPosKey      = currentPortfolio + '__' + sg.name;
+        card.classList.add('sg-positioning');
+        // Disable native HTML5 drag while positioning (else mousedown
+        // would start a gallery-reorder drag instead of a pan).
+        card.draggable = false;
+        const img = card.querySelector('.subgallery-card-img img');
+        if (img) setupCoverDrag(img);
+    }
+
+    function exitCoverPositionMode(i) {
+        // Allow calling without arg to exit whichever is active.
+        let card = null;
+        if (typeof i === 'number') {
+            const cards = document.querySelectorAll('#subgallery-grid .subgallery-card');
+            card = cards[i];
+        } else {
+            card = coverPosModeCard;
+        }
+        if (!card) return;
+        card.classList.remove('sg-positioning');
+        card.draggable = isAdmin;
+        // Click the empty area of the card right after exit shouldn't
+        // navigate (a Done click might bubble up); reuse the existing
+        // sgClickSuppressUntil window.
+        sgClickSuppressUntil = Date.now() + 400;
+        coverPosModeCard = null;
+        coverPosKey      = null;
+    }
+
+    function adjustCoverZoom(i, dir) {
+        if (!isAdmin) return;
+        const sg = collectionData[currentPortfolio][i];
+        const key = currentPortfolio + '__' + sg.name;
+        const cur = subgalleryCoverPositions[key] || { x: 50, y: 0, scale: 1 };
+        const next = Math.max(COVER_MIN_SCALE, Math.min(COVER_MAX_SCALE, (cur.scale || 1) + dir * COVER_SCALE_STEP));
+        subgalleryCoverPositions[key] = { x: cur.x ?? 50, y: cur.y ?? 0, scale: next };
+        applyCoverPosToCard(i);
+        saveCoverPos(key);
+    }
+
+    function resetCoverPosition(i) {
+        if (!isAdmin) return;
+        const sg = collectionData[currentPortfolio][i];
+        const key = currentPortfolio + '__' + sg.name;
+        delete subgalleryCoverPositions[key];
+        applyCoverPosToCard(i);
+        // Clear server-side too (POST with null pos deletes the key).
+        fetch('/api/smugmug?action=save-sgcover-pos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key, pos: null })
+        }).catch(e => console.warn('Cover pos clear failed:', e));
+    }
+
+    function applyCoverPosToCard(i) {
+        const cards = document.querySelectorAll('#subgallery-grid .subgallery-card');
+        const card  = cards[i];
+        if (!card) return;
+        const img = card.querySelector('.subgallery-card-img img');
+        if (!img) return;
+        const sg  = collectionData[currentPortfolio][i];
+        const css = getCoverPosCss(currentPortfolio, sg);
+        img.style.objectPosition = css.objectPosition;
+        img.style.transform = css.transform;
+        img.style.transformOrigin = 'center center';
+    }
+
+    function saveCoverPos(key) {
+        const pos = subgalleryCoverPositions[key];
+        fetch('/api/smugmug?action=save-sgcover-pos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key, pos })
+        }).catch(e => console.warn('Cover pos sync failed:', e));
+    }
+
+    // Drag-to-pan on the cover image. Mirrors setupHeroDrag's math but
+    // only active while the card is in position mode and the admin is
+    // logged in. Also wires a wheel handler for zoom.
+    function setupCoverDrag(img) {
+        if (img.dataset.coverDragBound === '1') return;
+        img.dataset.coverDragBound = '1';
+        let dragging = false, startX = 0, startY = 0, startPx = 50, startPy = 0;
+        const inMode = () => img.closest('.subgallery-card.sg-positioning') != null;
+        const currentKey = () => {
+            const card = img.closest('.subgallery-card');
+            if (!card) return null;
+            const idx = parseInt(card.dataset.sgIndex, 10);
+            const sg  = collectionData[currentPortfolio]?.[idx];
+            return sg ? currentPortfolio + '__' + sg.name : null;
+        };
+        const getCurrent = () => {
+            const key = currentKey();
+            return key ? (subgalleryCoverPositions[key] || { x: 50, y: 0, scale: 1 }) : { x: 50, y: 0, scale: 1 };
+        };
+        const begin = (cx, cy) => {
+            if (!isAdmin || !inMode()) return;
+            dragging = true;
+            startX = cx; startY = cy;
+            const cur = getCurrent();
+            startPx = cur.x ?? 50; startPy = cur.y ?? 0;
+            img.style.cursor = 'grabbing';
+            img.style.userSelect = 'none';
+        };
+        const move = (cx, cy) => {
+            if (!dragging) return;
+            const w = img.clientWidth || 1;
+            const h = img.clientHeight || 1;
+            // 1px of drag = ~1% of position move, inverted so dragging the
+            // image down reveals lower portions (raises Y%).
+            const dx = ((cx - startX) / w) * 100 * -1;
+            const dy = ((cy - startY) / h) * 100 * -1;
+            const px = Math.max(0, Math.min(100, startPx + dx));
+            const py = Math.max(0, Math.min(100, startPy + dy));
+            const key = currentKey();
+            const cur = getCurrent();
+            subgalleryCoverPositions[key] = { x: px, y: py, scale: cur.scale ?? 1 };
+            img.style.objectPosition = px.toFixed(1) + '% ' + py.toFixed(1) + '%';
+        };
+        const end = () => {
+            if (!dragging) return;
+            dragging = false;
+            img.style.cursor = '';
+            img.style.userSelect = '';
+            const key = currentKey();
+            if (key) saveCoverPos(key);
+        };
+        img.addEventListener('mousedown', e => {
+            if (!isAdmin || !inMode()) return;
+            e.preventDefault();
+            e.stopPropagation();
+            begin(e.clientX, e.clientY);
+        });
+        document.addEventListener('mousemove', e => { if (dragging) move(e.clientX, e.clientY); });
+        document.addEventListener('mouseup', end);
+        // Touch
+        img.addEventListener('touchstart', e => {
+            if (!isAdmin || !inMode() || !e.touches[0]) return;
+            const t = e.touches[0];
+            begin(t.clientX, t.clientY);
+        }, { passive: true });
+        document.addEventListener('touchmove', e => {
+            if (dragging && e.touches[0]) {
+                move(e.touches[0].clientX, e.touches[0].clientY);
+                e.preventDefault();
+            }
+        }, { passive: false });
+        document.addEventListener('touchend', end);
+        // Wheel zoom
+        img.addEventListener('wheel', e => {
+            if (!isAdmin || !inMode()) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const key = currentKey();
+            if (!key) return;
+            const cur = getCurrent();
+            const dir = e.deltaY > 0 ? -1 : 1; // scroll up = zoom in
+            const next = Math.max(COVER_MIN_SCALE, Math.min(COVER_MAX_SCALE, (cur.scale || 1) + dir * COVER_SCALE_STEP));
+            subgalleryCoverPositions[key] = { x: cur.x ?? 50, y: cur.y ?? 0, scale: next };
+            img.style.transform = next === 1 ? '' : `scale(${next.toFixed(3)})`;
+            img.style.transformOrigin = 'center center';
+            saveCoverPos(key);
+        }, { passive: false });
+    }
+
+    async function loadSubgalleryCoverPositionsFromKV() {
+        try {
+            const resp = await fetch('/api/smugmug?action=list-sgcover-positions&_=' + Date.now());
+            if (!resp.ok) return;
+            const data = await resp.json();
+            if (data && data.positions && typeof data.positions === 'object') {
+                subgalleryCoverPositions = data.positions;
+                if (currentPortfolio) renderSubGalleryGrid();
+            }
+        } catch (e) {
+            console.warn('Sub-gallery cover positions KV load failed:', e);
+        }
+    }
+
+    // Press Escape while in position mode to exit (no save needed —
+    // changes are saved on each drag/zoom action).
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && coverPosModeCard) {
+            exitCoverPositionMode();
         }
     });
 
@@ -5387,6 +5726,7 @@
     loadTextsFromKV();
     loadPortfolioOrderFromKV();
     loadPlayerHerosFromKV();
+    loadSubgalleryCoverPositionsFromKV();
     renderAboutCollage();      // paint with defaults so visitors see images instantly
     loadAboutOrderFromKV();    // then apply the saved order from KV
     renderPortfolioGrid();

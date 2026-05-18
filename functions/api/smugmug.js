@@ -263,6 +263,31 @@ export async function onRequest(context) {
       return new Response(JSON.stringify({ order }), { headers: corsHeaders });
     }
 
+    // Save the position + zoom for a single sub-gallery card cover.
+    // Body: { key: "<catId>__<playerName>", pos: { x, y, scale } }
+    // pos is null to clear (reset to defaults).
+    if (action === 'save-sgcover-pos' && request.method === 'POST') {
+      const body = await request.json();
+      const { key, pos } = body;
+      if (!key) return new Response(JSON.stringify({ error: 'Missing key' }), { status: 400, headers: corsHeaders });
+      const stored = await env.CAPS_VAULT_KV.get('sgcoverPositions');
+      const map = stored ? JSON.parse(stored) : {};
+      if (pos && typeof pos === 'object') {
+        map[key] = pos;
+      } else {
+        delete map[key];
+      }
+      await env.CAPS_VAULT_KV.put('sgcoverPositions', JSON.stringify(map));
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Get all saved sub-gallery cover positions. Returns { positions: { key: {x,y,scale} } }.
+    if (action === 'list-sgcover-positions') {
+      const stored = await env.CAPS_VAULT_KV.get('sgcoverPositions');
+      const positions = stored ? JSON.parse(stored) : {};
+      return new Response(JSON.stringify({ positions }), { headers: corsHeaders });
+    }
+
     // Save a Browse-page (category) cover URL to KV. Body: { categoryId, coverUrl }.
     // Pass null/empty coverUrl to clear it.
     if (action === 'save-portfolio-cover' && request.method === 'POST') {
@@ -384,6 +409,7 @@ export async function onRequest(context) {
         if (key.name === 'portfolioOrder') continue;
         if (key.name === 'stats') continue;
         if (key.name === 'aboutPhotoOrder') continue;
+        if (key.name === 'sgcoverPositions') continue;
         data[key.name] = await env.CAPS_VAULT_KV.get(key.name);
       }
       return new Response(JSON.stringify(data), { headers: corsHeaders });
