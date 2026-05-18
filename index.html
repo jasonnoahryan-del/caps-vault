@@ -641,6 +641,13 @@
         transition: border-color 0.2s
     }
 
+    /* Pucks are round — a horizontal tile suits them much better than the
+       default vertical jersey-style 2:3. The body class is toggled by
+       openPortfolio/openSubGallery/showPage. */
+    body.cat-pucks-list .subgallery-card-img {
+        aspect-ratio: 3/2;
+    }
+
     .subgallery-card:hover .subgallery-card-img {
         border-color: var(--caps-red)
     }
@@ -3082,9 +3089,10 @@
                 name: name
             }, '', '#' + name);
         }
-        // Leaving the sub-gallery view — drop the card-layout class so the
-        // larger-cell styling doesn't bleed into other pages.
+        // Leaving the sub-gallery view — drop the per-category classes so
+        // their styling doesn't bleed into other pages.
         document.body.classList.remove('card-layout');
+        document.body.classList.remove('cat-pucks-list');
         // Always scroll to the top so each page starts at its hero/header
         // instead of whatever scroll position the previous page left behind.
         window.scrollTo(0, 0);
@@ -3146,6 +3154,10 @@
         // Sub-gallery list view (not the media view) — strip the card-layout
         // class in case we got here from a card category.
         document.body.classList.remove('card-layout');
+        // Pucks are circular — they read better in a horizontal cell than
+        // the default 2:3 vertical jersey-style tile. Toggle a body class
+        // that the CSS uses to override aspect-ratio for just this list.
+        document.body.classList.toggle('cat-pucks-list', id === 'pucks');
         window.scrollTo(0, 0);
     }
 
@@ -3388,6 +3400,8 @@
         // and small. The body class drives CSS that overrides .media-grid.
         const cardCats = ['cards', 'autographed-cards', 'captains-autos', 'autographs'];
         document.body.classList.toggle('card-layout', cardCats.includes(currentPortfolio));
+        // We're now in the media view, not the puck list — clear that class.
+        document.body.classList.remove('cat-pucks-list');
         if (!fromHistory) {
             history.pushState({
                 view: 'subgallery',
