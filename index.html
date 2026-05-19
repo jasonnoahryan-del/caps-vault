@@ -2290,27 +2290,31 @@
         border-bottom: 3px solid var(--caps-red);
         align-items: start;
     }
+    /* Uniform grid layout with square cells so every photo is the same
+       size, regardless of its source aspect ratio. This makes the bottom
+       edges of all three columns align cleanly. */
     .about-collage-side {
-        column-count: 2;
-        column-gap: 6px;
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+        align-content: start;
     }
-    /* Middle column collage is wider than the side ones, so give it more
-       sub-columns to keep individual photos a similar visual size. */
     .about-collage-middle {
-        column-count: 3;
+        grid-template-columns: repeat(3, 1fr);
     }
     @media (max-width: 1100px) {
-        .about-collage-middle { column-count: 3; }
+        .about-collage-middle { grid-template-columns: repeat(3, 1fr); }
     }
     @media (max-width: 700px) {
-        .about-collage-middle { column-count: 2; }
+        .about-collage-middle { grid-template-columns: repeat(2, 1fr); }
     }
     .about-collage-side img {
         width: 100%;
-        height: auto;
+        height: 100%;
+        aspect-ratio: 1 / 1;
+        object-fit: cover;
         display: block;
-        margin-bottom: 6px;
-        break-inside: avoid;
+        margin: 0;
         border-radius: 2px;
         border: 1px solid rgba(255, 255, 255, 0.04);
         transition: transform 0.25s ease, filter 0.25s ease, box-shadow 0.25s ease;
@@ -4163,8 +4167,8 @@
     //   - next ABOUT_MIDDLE_COUNT entries go in the middle, beneath the
     //     YouTube link, filling the otherwise-empty space
     //   - the remainder goes right
-    const ABOUT_LEFT_COUNT   = 9;
-    const ABOUT_MIDDLE_COUNT = 6;
+    const ABOUT_LEFT_COUNT   = 10;
+    const ABOUT_MIDDLE_COUNT = 3;
     // Default ordering is just 1..N. Replaced by KV when loaded.
     let aboutPhotoOrder = Array.from({ length: ABOUT_PHOTO_COUNT }, (_, i) => i + 1);
 
