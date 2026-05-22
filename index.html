@@ -68,6 +68,12 @@
         gap: 6px
     }
 
+    .nav-right {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
     .nav-link {
         font-family: 'Oswald', sans-serif;
         font-size: 17px;
@@ -86,7 +92,40 @@
     .nav-link:hover, .nav-link.active {
         color: var(--caps-white);
         border-bottom-color: var(--caps-red)
-    }/* PAGES */
+    }
+
+    /* Hamburger button — hidden on desktop, shown on small screens via media query below. */
+    .nav-hamburger {
+        display: none;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        padding: 10px;
+        width: 48px;
+        height: 48px;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+    }
+    .nav-hamburger span {
+        display: block;
+        width: 24px;
+        height: 2px;
+        background: var(--caps-white);
+        transition: transform 0.2s ease, opacity 0.2s ease;
+        border-radius: 1px;
+    }
+    .nav-hamburger[aria-expanded="true"] span:nth-child(1) {
+        transform: translateY(7px) rotate(45deg);
+    }
+    .nav-hamburger[aria-expanded="true"] span:nth-child(2) {
+        opacity: 0;
+    }
+    .nav-hamburger[aria-expanded="true"] span:nth-child(3) {
+        transform: translateY(-7px) rotate(-45deg);
+    }
+    /* PAGES */
     .page {
         display: none;
         min-height: calc(100vh - 64px)
@@ -711,9 +750,10 @@
     .subgallery-card:hover .sg-delete-btn { opacity: 1; }
     .sg-delete-btn:hover { background: var(--caps-red); }
     /* Touch devices have no hover, so the X would never appear. Show it
-       always on no-hover devices so admins can actually tap it. */
+       always on no-hover devices so admins can actually tap it. Also bumped
+       to a 44px touch target. */
     @media (hover: none) {
-        .sg-delete-btn { opacity: 0.95; }
+        .sg-delete-btn { opacity: 0.95; width: 44px; height: 44px; font-size: 22px; top: 4px; right: 4px; }
     }
 
     /* ── COVER POSITION EDITOR ── admin-only on each sub-gallery card. */
@@ -743,7 +783,7 @@
     .subgallery-card:hover .sg-pos-btn { opacity: 1; }
     .sg-pos-btn:hover { background: var(--caps-gold, #B8960C); }
     @media (hover: none) {
-        .sg-pos-btn { opacity: 0.95; }
+        .sg-pos-btn { opacity: 0.95; width: 44px; height: 44px; font-size: 18px; top: 4px; left: 4px; }
     }
     .subgallery-card.sg-positioning {
         outline: 3px solid var(--caps-gold, #B8960C);
@@ -1680,14 +1720,14 @@
     @media (max-width: 768px) {
         /* NAV */
         nav {
-            height: auto;
-            padding: 10px 16px;
-            flex-wrap: wrap;
-            gap: 8px
+            height: 64px;
+            padding: 8px 14px;
+            gap: 8px;
+            position: sticky;
         }
 
         .nav-logo img {
-            width: 48px;
+            width: 44px;
             height: auto
         }
 
@@ -1695,15 +1735,45 @@
             font-size: 16px
         }
 
+        /* Hamburger visible on mobile; nav-links becomes a dropdown panel. */
+        .nav-hamburger {
+            display: flex;
+        }
         .nav-links {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            flex-direction: column;
+            background: var(--caps-dark);
+            border-bottom: 3px solid var(--caps-red);
             gap: 0;
-            flex-wrap: wrap
+            padding: 4px 0 8px;
+            box-shadow: 0 12px 24px rgba(0,0,0,0.45);
+            transform: translateY(-12px);
+            opacity: 0;
+            pointer-events: none;
+            transition: transform 0.2s ease, opacity 0.2s ease;
+        }
+        .nav-links.open {
+            transform: translateY(0);
+            opacity: 1;
+            pointer-events: auto;
         }
 
         .nav-link {
-            font-size: 11px;
-            padding: 8px 10px;
-            letter-spacing: 1px
+            font-size: 16px;
+            padding: 14px 22px;
+            letter-spacing: 2px;
+            text-align: left;
+            border-bottom: none;
+            border-left: 3px solid transparent;
+            min-height: 48px;
+        }
+        .nav-link:hover, .nav-link.active {
+            border-bottom-color: transparent;
+            border-left-color: var(--caps-red);
+            background: rgba(200, 16, 46, 0.08);
         }/* HERO */
 
         .hero {
@@ -1888,9 +1958,10 @@
         }
 
         .lightbox-arrow {
-            width: 36px;
-            height: 56px;
-            font-size: 20px
+            width: 48px;
+            height: 80px;
+            font-size: 26px;
+            background: rgba(200, 16, 46, 0.6);
         }
 
         .lightbox-info {
@@ -1912,8 +1983,13 @@
         }
 
         .lightbox-close {
-            font-size: 10px;
-            padding: 6px 10px
+            font-size: 12px;
+            padding: 12px 16px;
+            min-height: 44px;
+        }
+        .lightbox-top-bar .lightbox-btns {
+            gap: 6px;
+            flex-wrap: wrap;
         }/* ABOUT / CONTACT */
 
         .content-page {
@@ -1932,6 +2008,12 @@
 
         .admin-bar span {
             font-size: 11px
+        }
+
+        .admin-bar button {
+            font-size: 12px;
+            padding: 10px 14px;
+            min-height: 44px;
         }/* MODALS */
 
         .modal-box {
@@ -1955,11 +2037,7 @@
             display: none
         }
 
-        .nav-link {
-            font-size: 10px;
-            padding: 7px 8px;
-            letter-spacing: 0.5px
-        }
+        /* Nav-link sizes are already large from the dropdown rule above; no shrink here. */
 
         .portfolio-grid {
             grid-template-columns: repeat(2, 1fr)
@@ -2208,8 +2286,11 @@
         .search-overlay { padding-top: 24px; }
         .search-input { font-size: 18px; }
         .search-input-row { padding: 14px 16px; }
-        .search-result { padding: 10px 16px; }
+        .search-result { padding: 14px 16px; min-height: 56px; }
+        .search-close { font-size: 13px; padding: 12px 14px; min-height: 44px; min-width: 44px; }
         .nav-search-btn span { display: none; }
+        .nav-search-btn { padding: 12px; min-width: 44px; min-height: 44px; }
+        .nav-search-btn svg { width: 18px; height: 18px; }
     }
 
     /* "About This …" details panel that sits to the right of the hero. */
@@ -2405,14 +2486,19 @@
             <img id="nav-logo-img" src="" alt="Caps Game-Worn Jerseys Logo">
             <span>The Vault</span>
         </a>
-        <div class="nav-links">
+        <div class="nav-links" id="nav-links">
             <button class="nav-link active" onclick="showPage('home',this)">Home</button>
             <button class="nav-link" onclick="showPage('browse',this)">Browse</button>
             <button class="nav-link" onclick="showPage('about',this)">About</button>
             <button class="nav-link" onclick="showPage('contact',this)">Wants</button>
+        </div>
+        <div class="nav-right">
             <button class="nav-search-btn" onclick="openSearch()" aria-label="Search">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="20" y1="20" x2="16.5" y2="16.5"></line></svg>
                 <span>Search</span>
+            </button>
+            <button class="nav-hamburger" id="nav-hamburger" onclick="toggleMobileNav()" aria-label="Menu" aria-expanded="false">
+                <span></span><span></span><span></span>
             </button>
         </div>
     </nav>
@@ -3114,7 +3200,39 @@
         // Always scroll to the top so each page starts at its hero/header
         // instead of whatever scroll position the previous page left behind.
         window.scrollTo(0, 0);
+        // Close the mobile nav dropdown if it's open
+        closeMobileNav();
     }
+
+    // ── MOBILE NAV ──
+    // Toggle the hamburger-driven dropdown menu. Visible only on small screens
+    // (CSS handles display). Closing happens on any nav action, click outside,
+    // or escape key.
+    function toggleMobileNav() {
+        const links = document.getElementById('nav-links');
+        const btn = document.getElementById('nav-hamburger');
+        if (!links || !btn) return;
+        const isOpen = links.classList.toggle('open');
+        btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    }
+    function closeMobileNav() {
+        const links = document.getElementById('nav-links');
+        const btn = document.getElementById('nav-hamburger');
+        if (links) links.classList.remove('open');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+    }
+    // Click outside the nav closes the menu
+    document.addEventListener('click', e => {
+        const nav = document.querySelector('nav');
+        if (!nav) return;
+        const links = document.getElementById('nav-links');
+        if (!links || !links.classList.contains('open')) return;
+        if (!nav.contains(e.target)) closeMobileNav();
+    });
+    // Escape closes the menu
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') closeMobileNav();
+    });
 
     // ── PORTFOLIO (category) GRID ──
     function renderPortfolioGrid() {
@@ -4971,20 +5089,91 @@
         document.removeEventListener('keydown', lightboxKeyHandler);
     }
 
-    // Touch swipe support
-    let lbTouchStartX = 0;
-    document.getElementById('lightbox').addEventListener('touchstart', e => {
+    // Touch swipe support — horizontal to navigate, vertical (down) to close.
+    // Image follows the finger for visual feedback. Swipes starting on a
+    // button or editable text are ignored so buttons stay tappable.
+    let lbTouchStartX = 0, lbTouchStartY = 0, lbTouchTracking = false;
+    let lbTouchAxis = null; // 'x' or 'y' once we lock direction
+    const lbEl = document.getElementById('lightbox');
+    function lbTouchTargetIsInteractive(t) {
+        return !!(t && t.closest && t.closest('button, a, [contenteditable="true"], .lightbox-thumbs, video, input'));
+    }
+    function lbTouchImg() {
+        const img = document.getElementById('lightbox-img');
+        const vid = document.getElementById('lightbox-video');
+        if (img && img.style.display !== 'none') return img;
+        if (vid && vid.style.display !== 'none') return vid;
+        return null;
+    }
+    lbEl.addEventListener('touchstart', e => {
+        if (e.touches.length !== 1) { lbTouchTracking = false; return; }
+        if (lbTouchTargetIsInteractive(e.target)) { lbTouchTracking = false; return; }
         lbTouchStartX = e.touches[0].clientX;
-    }, {
-        passive: true
-    });
-    document.getElementById('lightbox').addEventListener('touchend', e => {
-        const diff = lbTouchStartX - e.changedTouches[0].clientX;
-        if (Math.abs(diff) > 50)
-            lightboxNav(diff > 0 ? 1 : -1);
-    }, {
-        passive: true
-    });
+        lbTouchStartY = e.touches[0].clientY;
+        lbTouchTracking = true;
+        lbTouchAxis = null;
+    }, { passive: true });
+
+    lbEl.addEventListener('touchmove', e => {
+        if (!lbTouchTracking) return;
+        const dx = e.touches[0].clientX - lbTouchStartX;
+        const dy = e.touches[0].clientY - lbTouchStartY;
+        if (lbTouchAxis === null) {
+            // Lock direction once movement clears 10px
+            if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+                lbTouchAxis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+            } else {
+                return;
+            }
+        }
+        const img = lbTouchImg();
+        if (!img) return;
+        if (lbTouchAxis === 'x') {
+            // Horizontal: image follows finger, faded
+            img.style.transition = 'none';
+            img.style.transform = `translateX(${dx}px)`;
+            img.style.opacity = String(Math.max(0.4, 1 - Math.abs(dx) / 400));
+        } else if (lbTouchAxis === 'y' && dy > 0) {
+            // Vertical down: image drops, fades — preview of dismiss
+            img.style.transition = 'none';
+            img.style.transform = `translateY(${dy}px)`;
+            img.style.opacity = String(Math.max(0.3, 1 - dy / 400));
+        }
+    }, { passive: true });
+
+    lbEl.addEventListener('touchend', e => {
+        if (!lbTouchTracking) return;
+        lbTouchTracking = false;
+        const img = lbTouchImg();
+        const dx = e.changedTouches[0].clientX - lbTouchStartX;
+        const dy = e.changedTouches[0].clientY - lbTouchStartY;
+        // Reset any in-progress transform/opacity
+        if (img) {
+            img.style.transition = 'transform 0.18s ease, opacity 0.18s ease';
+            img.style.transform = '';
+            img.style.opacity = '';
+            // Clear inline styles after transition so they don't linger
+            setTimeout(() => {
+                if (img) { img.style.transition = ''; }
+            }, 200);
+        }
+        if (lbTouchAxis === 'x' && Math.abs(dx) > 50) {
+            lightboxNav(dx < 0 ? 1 : -1);
+        } else if (lbTouchAxis === 'y' && dy > 100) {
+            closeLightboxBtn();
+        }
+    }, { passive: true });
+
+    lbEl.addEventListener('touchcancel', () => {
+        if (!lbTouchTracking) return;
+        lbTouchTracking = false;
+        const img = lbTouchImg();
+        if (img) {
+            img.style.transition = 'transform 0.18s ease, opacity 0.18s ease';
+            img.style.transform = '';
+            img.style.opacity = '';
+        }
+    }, { passive: true });
 
     // ── HOME STATS STRIP ──
     // Counts each physical piece, not photos:
