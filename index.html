@@ -2267,6 +2267,14 @@
         text-transform: uppercase;
         color: #888;
     }
+    .search-result-snippet {
+        font-family: 'Merriweather', serif;
+        font-size: 13px;
+        line-height: 1.5;
+        color: #b8bdc7;
+        margin-top: 6px;
+        max-width: 720px;
+    }
     .search-result mark {
         background: rgba(184, 150, 12, 0.3);
         color: var(--caps-white);
@@ -3979,6 +3987,30 @@
         return escapedText.replace(re, '<mark>$1</mark>');
     }
 
+    // Build a stable photoId the same way the lightbox does — preferring the
+    // SmugMug page URL so edited title/year/notes are keyed off the same
+    // identifier in KV.
+    function searchPhotoId(item, catId, sgIndex, i) {
+        return item.webUri || item.largeUrl || item.src || ('idx:' + catId + ':' + sgIndex + ':' + i);
+    }
+
+    // Make a short context snippet around the first match in a longer body
+    // of text — enough to show the user why this result matched without
+    // dumping the whole bio.
+    function searchSnippet(text, q, max) {
+        if (text == null) return '';
+        const s = String(text);
+        const lower = s.toLowerCase();
+        const idx = lower.indexOf(q);
+        if (idx === -1) return s.length > max ? s.slice(0, max) + '…' : s;
+        const before = Math.max(0, idx - 24);
+        const after = Math.min(s.length, idx + q.length + (max - 24 - q.length));
+        let out = s.slice(before, after);
+        if (before > 0) out = '… ' + out;
+        if (after < s.length) out = out + ' …';
+        return out;
+    }
+
     function renderSearchResults() {
         const input = document.getElementById('search-input');
         const out = document.getElementById('search-results');
@@ -3988,20 +4020,104 @@
         const results = [];
         if (q.length === 0) {
             // Empty state: prompt the user.
-            out.innerHTML = '<div class="search-empty">Type a name to search across every category</div>';
+            out.innerHTML = '<div class="search-empty">Type a name, year, or any word from a caption</div>';
             searchLastResults = [];
             searchFocusedIdx = -1;
             return;
         }
-        // Walk every category × every sub-gallery; match name substring.
+        const ovr = (typeof textOverrides === 'object' && textOverrides) ? textOverrides : {};
+        // Walk every category × every sub-gallery × every photo. Matches any
+        // edited text (titles, years, notes, bios, "About this jersey"
+        // details, category intros) as well as item.name/year/notes defaults.
         Object.keys(collectionData).forEach(catId => {
             const cat = portfolios.find(p => p.id === catId);
             const catName = cat ? cat.name : catId;
             const catIcon = cat ? cat.icon : '🏒';
+
+            // Category-level intro (used on singleGallery categories and on
+            // category list pages). Matched as a single result that opens
+            // the category.
+            const catIntroBody = ovr['cat-intro:' + catId];
+            const catIntroTitle = ovr['cat-intro-title:' + catId];
+            const catIntroHit = (catIntroBody && catIntroBody.toLowerCase().includes(q))
+                || (catIntroTitle && catIntroTitle.toLowerCase().includes(q));
+            if (catIntroHit) {
+                results.push({
+                    catId, catName, catIcon,
+                    sg: null, sgIndex: -1,
+                    matchType: 'cat-intro',
+                    label: catIntroTitle || catName + ' — intro',
+                    snippet: searchSnippet(catIntroBody || catIntroTitle || '', q, 120),
+                });
+            }
+
             collectionData[catId].forEach((sg, sgIndex) => {
                 if (!sg || !sg.name) return;
+
+                // Gallery name match → original behaviour.
                 if (sg.name.toLowerCase().includes(q)) {
-                    results.push({ catId, catName, catIcon, sg, sgIndex });
+                    results.push({
+                        catId, catName, catIcon, sg, sgIndex,
+                        matchType: 'gallery',
+                        label: sg.name,
+                        snippet: '',
+                    });
+                }
+
+                // Bio + "About This Jersey/Stick/…" details (player-level
+                // text). Show as one result per gallery.
+                const bio = ovr['bio:' + sg.name];
+                const details = ovr['pdetails:' + catId + '__' + sg.name];
+                if (bio && bio.toLowerCase().includes(q)) {
+                    results.push({
+                        catId, catName, catIcon, sg, sgIndex,
+                        matchType: 'bio',
+                        label: sg.name + ' — bio',
+                        snippet: searchSnippet(bio, q, 120),
+                    });
+                }
+                if (details && details.toLowerCase().includes(q)) {
+                    results.push({
+                        catId, catName, catIcon, sg, sgIndex,
+                        matchType: 'details',
+                        label: sg.name + ' — about this item',
+                        snippet: searchSnippet(details, q, 120),
+                    });
+                }
+
+                // Photo-level metadata. For each item, build the photoId the
+                // same way the lightbox does and check edited title/year/notes
+                // plus the original item.name/year/notes defaults. One result
+                // per matching photo so dups across fields collapse.
+                if (Array.isArray(sg.items)) {
+                    sg.items.forEach((item, i) => {
+                        const pid = searchPhotoId(item, catId, sgIndex, i);
+                        const titleVal = (ovr['photo-title:' + pid] != null ? ovr['photo-title:' + pid] : (item.name || ''));
+                        const yearVal  = (ovr['photo-year:'  + pid] != null ? ovr['photo-year:'  + pid] : (item.year || ''));
+                        const notesVal = (ovr['photo-notes:' + pid] != null ? ovr['photo-notes:' + pid] : (item.notes || ''));
+                        const hitTitle = titleVal && String(titleVal).toLowerCase().includes(q);
+                        const hitYear  = yearVal  && String(yearVal).toLowerCase().includes(q);
+                        const hitNotes = notesVal && String(notesVal).toLowerCase().includes(q);
+                        if (!hitTitle && !hitYear && !hitNotes) return;
+                        // Pick the most specific field to display as the
+                        // snippet (notes > title > year).
+                        let snippet = '';
+                        if (hitNotes) snippet = searchSnippet(notesVal, q, 120);
+                        else if (hitTitle) snippet = searchSnippet(titleVal, q, 120);
+                        else if (hitYear)  snippet = String(yearVal);
+                        const label = (titleVal && String(titleVal).trim()) || (sg.name + ' — photo ' + (i + 1));
+                        results.push({
+                            catId, catName, catIcon, sg, sgIndex,
+                            matchType: 'photo',
+                            photoIndex: i,
+                            label,
+                            snippet,
+                            // Use the photo's own thumb if available — more
+                            // useful than the gallery cover when the match
+                            // is on a specific image.
+                            thumb: item.thumbUrl || item.src || item.largeUrl || sg.cover || null,
+                        });
+                    });
                 }
             });
         });
@@ -4013,25 +4129,57 @@
         }
         searchFocusedIdx = 0;
         out.innerHTML = results.map((r, i) => {
-            const thumb = r.sg.cover
-                ? `style="background-image:url('${String(r.sg.cover).replace(/'/g, "\\'")}')"`
+            const thumbUrl = r.thumb || (r.sg && r.sg.cover) || null;
+            const thumb = thumbUrl
+                ? `style="background-image:url('${String(thumbUrl).replace(/'/g, "\\'")}')"`
                 : '';
-            const fallback = r.sg.cover ? '' : r.catIcon;
-            return `<div class="search-result ${i === 0 ? 'focused' : ''}" onclick="goToSearchResult('${r.catId}', ${r.sgIndex})">
+            const fallback = thumbUrl ? '' : r.catIcon;
+            // Build a meta line: category · context for the match type.
+            let metaCtx = '';
+            if (r.matchType === 'gallery' && r.sg) {
+                metaCtx = `${r.sg.items.length} ${r.sg.items.length === 1 ? 'item' : 'items'}`;
+            } else if (r.matchType === 'bio') {
+                metaCtx = 'bio';
+            } else if (r.matchType === 'details') {
+                metaCtx = 'about this item';
+            } else if (r.matchType === 'photo') {
+                metaCtx = `${r.sg ? r.sg.name + ' · ' : ''}photo`;
+            } else if (r.matchType === 'cat-intro') {
+                metaCtx = 'intro';
+            }
+            const args = `'${r.catId}', ${r.sgIndex}, ${r.matchType === 'photo' ? r.photoIndex : 'null'}`;
+            const snippetHtml = r.snippet
+                ? `<div class="search-result-snippet">${highlightMatch(r.snippet, raw)}</div>`
+                : '';
+            return `<div class="search-result ${i === 0 ? 'focused' : ''}" onclick="goToSearchResult(${args})">
                 <div class="search-result-thumb" ${thumb}>${fallback}</div>
                 <div class="search-result-text">
-                    <div class="search-result-name">${highlightMatch(r.sg.name, raw)}</div>
-                    <div class="search-result-meta">${r.catName} · ${r.sg.items.length} ${r.sg.items.length === 1 ? 'item' : 'items'}</div>
+                    <div class="search-result-name">${highlightMatch(r.label, raw)}</div>
+                    <div class="search-result-meta">${r.catName}${metaCtx ? ' · ' + metaCtx : ''}</div>
+                    ${snippetHtml}
                 </div>
             </div>`;
         }).join('');
     }
 
-    function goToSearchResult(catId, sgIndex) {
+    function goToSearchResult(catId, sgIndex, photoIndex) {
         closeSearch();
-        if (!collectionData[catId] || !collectionData[catId][sgIndex]) return;
+        if (!collectionData[catId]) return;
+        // Category-intro match → just open the category landing page.
+        if (sgIndex === -1 || sgIndex == null) {
+            openPortfolio(catId);
+            return;
+        }
+        if (!collectionData[catId][sgIndex]) return;
         openPortfolio(catId);
         openSubGallery(sgIndex);
+        // If a specific photo matched, pop the lightbox on it after the
+        // sub-gallery has rendered.
+        if (photoIndex != null && photoIndex >= 0) {
+            setTimeout(() => {
+                try { openLightbox(photoIndex); } catch (e) {}
+            }, 50);
+        }
     }
 
     // Keyboard shortcut: "/" or "Cmd-K" / "Ctrl-K" anywhere opens search.
