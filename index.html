@@ -925,17 +925,21 @@
        autographs, caps autographs) — bigger cells with a vertical-friendly
        aspect ratio and object-fit: contain so vertical trading cards aren't
        cropped or shrunken. Set by openSubGallery and cleared on nav away. */
-    body.card-layout .media-grid {
+    body.card-layout .media-grid,
+    body.cat-more .media-grid {
         grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
         gap: 20px;
     }
-    body.card-layout .media-item-thumb {
+    body.card-layout .media-item-thumb,
+    body.cat-more .media-item-thumb {
         aspect-ratio: 3 / 4;
         background: rgba(4, 30, 66, 0.55);
         padding: 10px;
     }
     body.card-layout .media-item-thumb img,
-    body.card-layout .media-item-thumb video {
+    body.card-layout .media-item-thumb video,
+    body.cat-more .media-item-thumb img,
+    body.cat-more .media-item-thumb video {
         object-fit: contain;
     }
     /* Bigger, more readable caption in card galleries so descriptions
