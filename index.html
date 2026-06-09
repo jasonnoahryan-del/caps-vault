@@ -3,7 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Caps Game-Worn Jerseys — The Vault</title>
+    <title>Caps Vault — Game-Worn Capitals Jerseys & Memorabilia</title>
+    <meta name="description" content="A personal collection of Washington Capitals game-worn jerseys, sticks, equipment, pucks, autographs, and cards — curated and photographed.">
+    <meta name="theme-color" content="#C8102E">
+
+    <!-- Open Graph (shows preview when shared on iMessage, Twitter, Facebook, Slack, etc.) -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Caps Vault">
+    <meta property="og:title" content="Caps Vault — Game-Worn Capitals Jerseys & Memorabilia">
+    <meta property="og:description" content="A personal collection of Washington Capitals game-worn jerseys, sticks, equipment, pucks, autographs, and cards.">
+    <meta property="og:url" content="https://capsgameused.com/">
+    <meta property="og:image" content="https://capsgameused.com/images/cup1.jpg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Caps Vault — Game-Worn Capitals Jerseys & Memorabilia">
+    <meta name="twitter:description" content="A personal collection of Washington Capitals game-worn jerseys, sticks, equipment, pucks, autographs, and cards.">
+    <meta name="twitter:image" content="https://capsgameused.com/images/cup1.jpg">
     <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Merriweather:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
     <style>
     * {
@@ -3175,6 +3193,22 @@
         }
     }
 
+    // ── PAGE TITLES ──
+    // Updates document.title to reflect the current view. Helps with
+    // browser tab clarity and social-share previews (Open Graph reads
+    // the page title at request time, though for SPAs this mostly
+    // benefits browser history and bookmarks).
+    const SITE_TITLE_SUFFIX = ' — Caps Vault';
+    function setPageTitle(name) {
+        const map = {
+            home:    'Caps Vault — Game-Worn Capitals Jerseys & Memorabilia',
+            browse:  'Browse Collection' + SITE_TITLE_SUFFIX,
+            about:   'About' + SITE_TITLE_SUFFIX,
+            contact: 'Wants' + SITE_TITLE_SUFFIX,
+        };
+        document.title = map[name] || ('Caps Vault — Game-Worn Capitals Jerseys & Memorabilia');
+    }
+
     function showPage(name, btn, fromHistory) {
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         document.getElementById('page-' + name).classList.add('active');
@@ -3210,6 +3244,7 @@
         window.scrollTo(0, 0);
         // Close the mobile nav dropdown if it's open
         closeMobileNav();
+        setPageTitle(name);
     }
 
     // ── MOBILE NAV ──
@@ -3303,6 +3338,7 @@
         // that the CSS uses to override aspect-ratio for just this list.
         document.body.classList.toggle('cat-pucks-list', id === 'pucks');
         window.scrollTo(0, 0);
+        document.title = name + SITE_TITLE_SUFFIX;
     }
 
     // Cover-photo position/zoom state for each sub-gallery card. Keyed by
@@ -3554,6 +3590,7 @@
             }, '', '#browse/' + currentPortfolio + '/' + i);
         }
         window.scrollTo(0, 0);
+        document.title = sg.name + ' · ' + currentPortfolioName + SITE_TITLE_SUFFIX;
     }
 
     function goBackToCategory() {
@@ -5718,6 +5755,84 @@
         window.location.replace(u.toString());
     }
 
+    // ── KV BACKUP EXPORT ──
+    // Pull every KV value the site cares about into one JSON blob and
+    // download it as a file. Insurance against accidental edits/deletes
+    // and against KV outages or migrations. Run this whenever you've
+    // made a lot of changes (new galleries, bios, photo captions, etc.)
+    // so you have a known-good restore point on disk.
+    async function downloadKvBackup(btn) {
+        const origText = btn ? btn.textContent : null;
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ Backing up…'; }
+        try {
+            const stamp = Date.now();
+            const q = name => '/api/smugmug?action=' + name + '&_=' + stamp;
+            // Fire all list endpoints in parallel.
+            const endpoints = [
+                ['galleries',       'list'],
+                ['covers',          'list-covers'],
+                ['playerHeros',     'list-player-heros'],
+                ['playerHeroPos',   'list-player-hero-pos'],
+                ['portfolioCovers', 'list-portfolio-covers'],
+                ['portfolioOrder',  'list-portfolio-order'],
+                ['galleryOrders',   'list-gallery-orders'],
+                ['featured',        'list-featured'],
+                ['texts',           'list-texts'],
+                ['stats',           'list-stats'],
+                ['aboutOrder',      'list-about-order'],
+                ['sgcoverPositions','list-sgcover-positions'],
+            ];
+            const results = await Promise.all(endpoints.map(async ([key, action]) => {
+                try {
+                    const r = await fetch(q(action));
+                    if (!r.ok) return [key, { error: 'HTTP ' + r.status }];
+                    const j = await r.json();
+                    return [key, j];
+                } catch (e) {
+                    return [key, { error: String(e && e.message || e) }];
+                }
+            }));
+            const payload = {
+                exportedAt: new Date().toISOString(),
+                site: 'capsgameused.com',
+                schemaVersion: 1,
+            };
+            results.forEach(([k, v]) => { payload[k] = v; });
+
+            const json = JSON.stringify(payload, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const fname = 'caps-vault-backup-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + 'Z.json';
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fname;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                URL.revokeObjectURL(url);
+                a.remove();
+            }, 1000);
+
+            // Quick summary so the admin knows it actually contained data.
+            const summary = [
+                'galleries: ' + Object.keys(payload.galleries || {}).length + ' album URLs',
+                'covers: ' + Object.keys(payload.covers || {}).length,
+                'playerHeros: ' + Object.keys(payload.playerHeros || {}).length,
+                'playerHeroPos: ' + Object.keys(payload.playerHeroPos || {}).length,
+                'portfolioCovers: ' + Object.keys(payload.portfolioCovers || {}).length,
+                'sgcoverPositions: ' + Object.keys(payload.sgcoverPositions || {}).length,
+                'texts: ' + Object.keys((payload.texts && payload.texts.texts) || {}).length + ' edits',
+                'featured: ' + ((payload.featured && payload.featured.featured) || []).length + ' tiles',
+                'galleryOrders: ' + Object.keys((payload.galleryOrders && payload.galleryOrders.orders) || payload.galleryOrders || {}).length,
+            ].join('\n');
+            alert('Backup downloaded:\n\n' + fname + '\n\n' + summary);
+        } catch (e) {
+            alert('Backup failed: ' + (e && e.message || e));
+        } finally {
+            if (btn && origText) { btn.disabled = false; btn.textContent = origText; }
+        }
+    }
+
     // Load album URLs from KV and auto-populate galleries for all visitors.
     // SmugMug fetches run in parallel (capped concurrency) instead of one
     // gallery at a time — major speedup for large categories like sticks.
@@ -6256,6 +6371,7 @@
             <button onclick="document.getElementById('smugmug-settings-modal').classList.add('open')">SmugMug Settings</button>
             <button onclick="resetLocalCache()" title="Wipe this device's saved data and reload from server. Use this if mobile and desktop look out of sync.">Reset Local Cache</button>
             <button onclick="kvDebug()" title="Show what's actually stored in KV vs what's displayed.">KV Debug</button>
+            <button onclick="downloadKvBackup(this)" title="Download a full JSON backup of every KV value (album URLs, covers, orders, texts, featured, stats, hero positions, and more) so you can restore manually if anything ever gets lost.">💾 Backup</button>
             <button onclick="deleteByKey()" title="Delete a specific gallery by its KV key (e.g. captains-autos__Captain's Autographs). Use for cleanup that the X button can't reach.">Delete KV Key</button>
             <button onclick="logout()">Log Out</button>
         </div>
