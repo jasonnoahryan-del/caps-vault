@@ -939,15 +939,29 @@
         object-fit: contain;
     }
     /* Bigger, more readable caption in card galleries so descriptions
-       (year, set, parallel, autograph type, etc.) are easy to scan. */
-    body.card-layout .media-item-info p {
-        font-size: 13px;
-        color: #cdd1d8;
-        line-height: 1.5;
+       (year, set, parallel, autograph type, etc.) are easy to scan.
+       Single-gallery pages have plenty of horizontal room under each
+       photo, so the caption can carry real weight. */
+    body.card-layout .media-item-info,
+    body.cat-more .media-item-info {
+        padding: 14px 16px 16px;
     }
-    body.card-layout .media-item-info .media-item-year {
+    body.card-layout .media-item-info p,
+    body.cat-more .media-item-info p {
+        font-size: 17px;
+        color: #cdd1d8;
+        line-height: 1.55;
+        font-family: 'Merriweather', serif;
+        letter-spacing: 0;
+    }
+    body.card-layout .media-item-info .media-item-year,
+    body.cat-more .media-item-info .media-item-year {
         color: var(--caps-red);
-        font-weight: 600;
+        font-weight: 700;
+        font-family: 'Oswald', sans-serif;
+        font-size: 14px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
     }
 
     .media-item {
@@ -2439,33 +2453,9 @@
         color: #cdd1d8;
         margin-top: 14px;
     }
-    /* Single-gallery categories (Cards, Autographed Cards, Captains
-       Autographs, Caps Autographs, More) show the intro on the
-       sub-gallery page itself — there's no separate list page eating
-       vertical space, so the intro can breathe. Bump the title and body
-       sizes and widen the column to use the available real estate. */
-    #page-subgallery .category-intro {
-        padding: 56px 40px 16px;
-    }
-    #page-subgallery .category-intro-inner {
-        max-width: 1200px;
-    }
-    #page-subgallery .category-intro h2 {
-        font-size: 34px;
-        letter-spacing: 4px;
-        margin-bottom: 14px;
-    }
-    #page-subgallery .category-intro-text {
-        font-size: 22px;
-        line-height: 1.85;
-        margin-top: 18px;
-    }
     @media (max-width: 700px) {
         .category-intro { padding: 24px 18px 4px; }
         .category-intro-text { font-size: 15px; line-height: 1.7; }
-        #page-subgallery .category-intro { padding: 28px 20px 8px; }
-        #page-subgallery .category-intro h2 { font-size: 24px; letter-spacing: 2px; }
-        #page-subgallery .category-intro-text { font-size: 18px; line-height: 1.75; }
     }
 
     /* ── ABOUT PAGE LAYOUT (text in middle, photos either side) ── */
@@ -3340,6 +3330,7 @@
         // their styling doesn't bleed into other pages.
         document.body.classList.remove('card-layout');
         document.body.classList.remove('cat-pucks-list');
+        document.body.classList.remove('cat-more');
         // Always scroll to the top so each page starts at its hero/header
         // instead of whatever scroll position the previous page left behind.
         window.scrollTo(0, 0);
@@ -3435,6 +3426,7 @@
         // Sub-gallery list view (not the media view) — strip the card-layout
         // class in case we got here from a card category.
         document.body.classList.remove('card-layout');
+        document.body.classList.remove('cat-more');
         // Pucks are circular — they read better in a horizontal cell than
         // the default 2:3 vertical jersey-style tile. Toggle a body class
         // that the CSS uses to override aspect-ratio for just this list.
@@ -3683,6 +3675,11 @@
         // and small. The body class drives CSS that overrides .media-grid.
         const cardCats = ['cards', 'autographed-cards', 'captains-autos', 'autographs'];
         document.body.classList.toggle('card-layout', cardCats.includes(currentPortfolio));
+        // "More Caps Stuff" is single-gallery too — give it the larger
+        // photo caption so descriptions are easy to read like the cards
+        // categories, but keep its default grid (4/3 thumb) since the
+        // photos aren't cards.
+        document.body.classList.toggle('cat-more', currentPortfolio === 'more');
         // We're now in the media view, not the puck list — clear that class.
         document.body.classList.remove('cat-pucks-list');
         if (!fromHistory) {
