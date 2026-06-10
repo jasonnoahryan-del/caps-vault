@@ -3979,6 +3979,15 @@
         renderLightboxThumbs();
         document.getElementById('lightbox').classList.add('open');
         document.addEventListener('keydown', lightboxKeyHandler);
+        // Push a history entry so the browser back button (and Android
+        // hardware back) closes the lightbox instead of navigating away
+        // from the page behind it. The popstate handler detects the
+        // lightbox is open and treats back as a dismissal.
+        try {
+            if (!history.state || history.state.view !== 'lightbox') {
+                history.pushState({ view: 'lightbox', index: i }, '', window.location.hash || window.location.pathname);
+            }
+        } catch (e) {}
     }
 
     function renderLightboxItem() {
@@ -5371,7 +5380,24 @@
         if (e.target === document.getElementById('lightbox'))
             closeLightboxBtn();
     }
+    // User-triggered close (Close button, Escape, swipe down, backdrop tap).
+    // Routes through history.back() so the URL and the back button stay in
+    // sync — the popstate handler then calls closeLightboxNow() to do the
+    // actual DOM cleanup. If we didn't push a lightbox state for some
+    // reason, fall through to a direct close.
     function closeLightboxBtn() {
+        const isOpen = document.getElementById('lightbox').classList.contains('open');
+        if (isOpen && history.state && history.state.view === 'lightbox') {
+            history.back();
+            return;
+        }
+        closeLightboxNow();
+    }
+
+    // Actual DOM cleanup. Called from the popstate handler (back button)
+    // and as a fallback from closeLightboxBtn when there's no lightbox
+    // state to pop.
+    function closeLightboxNow() {
         document.getElementById('lightbox').classList.remove('open');
         const vid = document.getElementById('lightbox-video');
         vid.pause?.();
@@ -6347,10 +6373,22 @@
 
     // Handle browser back/forward navigation
     window.addEventListener('popstate', (event) => {
+        // If the lightbox is open, back is a dismissal — close it and
+        // stop. Don't re-navigate the page underneath.
+        if (document.getElementById('lightbox').classList.contains('open')) {
+            closeLightboxNow();
+            return;
+        }
         const state = event.state;
         if (!state) {
             // No state — show home
             showPage('home', null, true);
+            return;
+        }
+        // If we somehow forwarded INTO a lightbox state without the
+        // lightbox actually being open (e.g. user hit forward after
+        // closing), ignore it.
+        if (state.view === 'lightbox') {
             return;
         }
         if (state.view === 'page') {
