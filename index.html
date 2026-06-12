@@ -3632,7 +3632,22 @@
         const bio = bioOverride != null ? bioOverride : (baseBio || '');
         const heroSrc = playerHeroImages[sg.name];
 
-        if (heroSrc && (bio || isAdmin)) {
+        // Stick galleries don't show the "Career with Capitals" bio or the
+        // "About This Stick" details panel — Jay wants those sections off
+        // for all sticks. Hide everything bio-related and fall through to
+        // just the photo grid.
+        const hideBioForCategory = (currentPortfolio === 'sticks');
+
+        if (hideBioForCategory) {
+            heroEl.classList.remove('visible');
+            bioSection.style.display = 'none';
+            const nameplateContainer = document.getElementById('player-nameplate-container');
+            if (nameplateContainer) nameplateContainer.style.display = 'none';
+            const heroContainer = document.getElementById('player-bio-hero-container');
+            if (heroContainer) heroContainer.style.display = 'none';
+            const detailsContainer = document.getElementById('player-details-container');
+            if (detailsContainer) detailsContainer.style.display = 'none';
+        } else if (heroSrc && (bio || isAdmin)) {
             heroImg.src = heroSrc;
             heroBio.textContent = bio;
             heroBio.dataset.editId = 'bio:' + sg.name;
