@@ -926,12 +926,14 @@
        aspect ratio and object-fit: contain so vertical trading cards aren't
        cropped or shrunken. Set by openSubGallery and cleared on nav away. */
     body.card-layout .media-grid,
-    body.cat-more .media-grid {
+    body.cat-more .media-grid,
+    body.cat-sticks .media-grid {
         grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
         gap: 20px;
     }
     body.card-layout .media-item-thumb,
-    body.cat-more .media-item-thumb {
+    body.cat-more .media-item-thumb,
+    body.cat-sticks .media-item-thumb {
         aspect-ratio: 3 / 4;
         background: rgba(4, 30, 66, 0.55);
         padding: 10px;
@@ -939,7 +941,9 @@
     body.card-layout .media-item-thumb img,
     body.card-layout .media-item-thumb video,
     body.cat-more .media-item-thumb img,
-    body.cat-more .media-item-thumb video {
+    body.cat-more .media-item-thumb video,
+    body.cat-sticks .media-item-thumb img,
+    body.cat-sticks .media-item-thumb video {
         object-fit: contain;
     }
     /* Bigger, more readable caption in card galleries so descriptions
@@ -3337,6 +3341,7 @@
         document.body.classList.remove('card-layout');
         document.body.classList.remove('cat-pucks-list');
         document.body.classList.remove('cat-more');
+        document.body.classList.remove('cat-sticks');
         // Always scroll to the top so each page starts at its hero/header
         // instead of whatever scroll position the previous page left behind.
         window.scrollTo(0, 0);
@@ -3433,6 +3438,7 @@
         // class in case we got here from a card category.
         document.body.classList.remove('card-layout');
         document.body.classList.remove('cat-more');
+        document.body.classList.remove('cat-sticks');
         // Pucks are circular — they read better in a horizontal cell than
         // the default 2:3 vertical jersey-style tile. Toggle a body class
         // that the CSS uses to override aspect-ratio for just this list.
@@ -3701,6 +3707,10 @@
         // categories, but keep its default grid (4/3 thumb) since the
         // photos aren't cards.
         document.body.classList.toggle('cat-more', currentPortfolio === 'more');
+        // Sticks photos are a mix of vertical and horizontal shots — same
+        // mixed-orientation treatment as cat-more (3:4 cells with
+        // object-fit: contain so each photo shows in full).
+        document.body.classList.toggle('cat-sticks', currentPortfolio === 'sticks');
         // We're now in the media view, not the puck list — clear that class.
         document.body.classList.remove('cat-pucks-list');
         if (!fromHistory) {
