@@ -2437,6 +2437,27 @@
         }
     }
 
+    /* Sticks-only layout: hide the bio text column, details panel, and
+       nameplate, leaving just the player hero image centered above the
+       photo grid. JS toggles .stick-hero-only on #player-bio-section. */
+    #player-bio-section.stick-hero-only .player-bio-text-col,
+    #player-bio-section.stick-hero-only #player-details-container,
+    #player-bio-section.stick-hero-only #player-nameplate-container {
+        display: none !important;
+    }
+    #player-bio-section.stick-hero-only .player-bio-row {
+        justify-content: center;
+    }
+    #player-bio-section.stick-hero-only #player-bio-hero-container {
+        flex: 0 1 720px !important;
+        max-width: 720px;
+        margin: 0 auto;
+        padding-bottom: 12px;
+    }
+    #player-bio-section.stick-hero-only #player-bio-hero-img {
+        max-height: 460px;
+    }
+
     /* ── CATEGORY INTRO (shown on single-gallery categories) ── */
     .category-intro {
         padding: 32px 32px 8px;
@@ -3638,21 +3659,25 @@
         const bio = bioOverride != null ? bioOverride : (baseBio || '');
         const heroSrc = playerHeroImages[sg.name];
 
+        // Clear any sticky stick-only class from the bio section so other
+        // galleries get their normal three-column layout back.
+        bioSection.classList.remove('stick-hero-only');
+
         // Stick galleries don't show the "Career with Capitals" bio or the
         // "About This Stick" details panel — Jay wants those sections off
-        // for all sticks. Hide everything bio-related and fall through to
-        // just the photo grid.
+        // for all sticks. Still show the player hero image, centered, at
+        // the top of the gallery. The bio section wrapper stays visible
+        // (otherwise the hero is hidden too) but its text/details/nameplate
+        // children are forced off via .stick-hero-only.
         const hideBioForCategory = (currentPortfolio === 'sticks');
 
         if (hideBioForCategory) {
             heroEl.classList.remove('visible');
-            bioSection.style.display = 'none';
-            const nameplateContainer = document.getElementById('player-nameplate-container');
-            if (nameplateContainer) nameplateContainer.style.display = 'none';
-            const heroContainer = document.getElementById('player-bio-hero-container');
-            if (heroContainer) heroContainer.style.display = 'none';
-            const detailsContainer = document.getElementById('player-details-container');
-            if (detailsContainer) detailsContainer.style.display = 'none';
+            // Mark the section so CSS can hide siblings and center the hero.
+            bioSection.classList.add('stick-hero-only');
+            bioSection.style.display = 'block';
+            // Show the hero image (KV override → cover → first item).
+            applyPlayerHero(sg);
         } else if (heroSrc && (bio || isAdmin)) {
             heroImg.src = heroSrc;
             heroBio.textContent = bio;
