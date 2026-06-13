@@ -3663,6 +3663,14 @@
         // galleries get their normal three-column layout back.
         bioSection.classList.remove('stick-hero-only');
 
+        // Single-gallery categories (Cards, Autographed Cards, Captains
+        // Autographs, Caps Autographs, More) don't have a player — the
+        // "Career with Washington Capitals" heading is nonsense there.
+        // Force the entire bio/details/hero/nameplate row off; those
+        // pages use the category-intro at the top of the page instead.
+        const catForBio = portfolios.find(p => p.id === currentPortfolio);
+        const isSingleGallery = !!(catForBio && catForBio.singleGallery);
+
         // Stick galleries don't show the "Career with Capitals" bio or the
         // "About This Stick" details panel — Jay wants those sections off
         // for all sticks. Still show the player hero image, centered, at
@@ -3671,7 +3679,18 @@
         // children are forced off via .stick-hero-only.
         const hideBioForCategory = (currentPortfolio === 'sticks');
 
-        if (hideBioForCategory) {
+        if (isSingleGallery) {
+            // Hide the entire bio row — single-gallery pages don't have a
+            // player so there's nothing to put there.
+            heroEl.classList.remove('visible');
+            bioSection.style.display = 'none';
+            const nameplateContainer = document.getElementById('player-nameplate-container');
+            if (nameplateContainer) nameplateContainer.style.display = 'none';
+            const heroContainer = document.getElementById('player-bio-hero-container');
+            if (heroContainer) heroContainer.style.display = 'none';
+            const detailsContainer = document.getElementById('player-details-container');
+            if (detailsContainer) detailsContainer.style.display = 'none';
+        } else if (hideBioForCategory) {
             heroEl.classList.remove('visible');
             // Mark the section so CSS can hide siblings and center the hero.
             bioSection.classList.add('stick-hero-only');
