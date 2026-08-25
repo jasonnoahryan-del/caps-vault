@@ -3641,9 +3641,20 @@
         document.getElementById('subgallery-title').textContent = sg.name;
         document.getElementById('sub-breadcrumb-cat').textContent = currentPortfolioName;
         document.getElementById('sub-breadcrumb-name').textContent = sg.name;
-        // Populate the category intro on the gallery view (used by
-        // single-gallery categories like Captains Autographs, Cards, etc.).
-        applyCategoryIntro('category-intro');
+        // Populate the category intro on the gallery view. Only relevant
+        // for single-gallery categories (Cards, Autographs, etc.) — for
+        // per-player categories the intro already lives on the category
+        // list page and repeating it on each individual player's gallery
+        // is redundant (e.g. the "evolution of the puck" text showing up
+        // on every player's puck gallery). Hide it unless we're in a
+        // single-gallery category.
+        const catForIntro = portfolios.find(p => p.id === currentPortfolio);
+        if (catForIntro && catForIntro.singleGallery) {
+            applyCategoryIntro('category-intro');
+        } else {
+            const introEl = document.getElementById('category-intro');
+            if (introEl) introEl.style.display = 'none';
+        }
 
         // Show hero banner if available, otherwise show standard bio section
         const bioSection = document.getElementById('player-bio-section');
