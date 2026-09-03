@@ -244,6 +244,34 @@ export async function onRequest(context) {
       return new Response(JSON.stringify({ orders }), { headers: corsHeaders });
     }
 
+    // Save the photo order inside a specific sub-gallery. Body:
+    // { key: "<catId>__<playerName>", order: [photoId, photoId, ...] }
+    // Each photoId is the SmugMug webUri / largeUrl / src used elsewhere
+    // to identify a specific photo. Pass order:null (or empty) to clear.
+    if (action === 'save-photo-order' && request.method === 'POST') {
+      const body = await request.json();
+      const { key, order } = body;
+      if (!key) return new Response(JSON.stringify({ error: 'Missing key' }), { status: 400, headers: corsHeaders });
+      const stored = await env.CAPS_VAULT_KV.get('photoOrders');
+      const orders = stored ? JSON.parse(stored) : {};
+      if (!order || (Array.isArray(order) && order.length === 0)) {
+        delete orders[key];
+      } else if (Array.isArray(order)) {
+        orders[key] = order;
+      } else {
+        return new Response(JSON.stringify({ error: 'order must be an array' }), { status: 400, headers: corsHeaders });
+      }
+      await env.CAPS_VAULT_KV.put('photoOrders', JSON.stringify(orders));
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    // Get all saved photo orders. Returns { orders: { key: [...], ... } }.
+    if (action === 'list-photo-orders') {
+      const stored = await env.CAPS_VAULT_KV.get('photoOrders');
+      const orders = stored ? JSON.parse(stored) : {};
+      return new Response(JSON.stringify({ orders }), { headers: corsHeaders });
+    }
+
     // Save the About-page photo order. Body: { order: [1, 5, 3, ...] } where
     // each entry is the original photo number (1..15). The first 7 entries
     // render in the left column; the rest render in the right column.
@@ -410,6 +438,7 @@ export async function onRequest(context) {
         if (key.name === 'stats') continue;
         if (key.name === 'aboutPhotoOrder') continue;
         if (key.name === 'sgcoverPositions') continue;
+        if (key.name === 'photoOrders') continue;
         data[key.name] = await env.CAPS_VAULT_KV.get(key.name);
       }
       return new Response(JSON.stringify(data), { headers: corsHeaders });

@@ -3476,6 +3476,111 @@
     // boot and reapplied on every renderSubGalleryGrid.
     let subgalleryCoverPositions = {};
 
+    // Photo order overrides per sub-gallery. Keyed by "<catId>__<playerName>",
+    // value is an array of photo IDs (SmugMug webUri / largeUrl / src) in
+    // the admin's chosen order. Applied after items are fetched from
+    // SmugMug so a drag-reorder actually sticks across page loads.
+    let photoOrders = {};
+
+    // Stable identifier for a photo — must match the id used elsewhere
+    // (lightbox, search, etc.). Falls back to a positional key only when
+    // the photo has no SmugMug URLs at all.
+    function photoIdFor(item, catId, sgIndex, i) {
+        return item.webUri || item.largeUrl || item.src || ('idx:' + catId + ':' + sgIndex + ':' + i);
+    }
+
+    // Reorder a sub-gallery's items array in place to match the saved
+    // order. Photos not in the saved order (new uploads, etc.) stay at
+    // the end in their original SmugMug sequence.
+    function applyPhotoOrder(catId, sg) {
+        if (!sg || !Array.isArray(sg.items) || sg.items.length < 2) return;
+        const key = catId + '__' + sg.name;
+        const savedOrder = photoOrders[key];
+        if (!Array.isArray(savedOrder) || savedOrder.length === 0) return;
+        const byId = new Map();
+        sg.items.forEach((it, idx) => {
+            byId.set(photoIdFor(it, catId, 0, idx), it);
+        });
+        const ordered = [];
+        const used = new Set();
+        savedOrder.forEach(id => {
+            if (byId.has(id)) {
+                ordered.push(byId.get(id));
+                used.add(id);
+            }
+        });
+        // Append any items that weren't in the saved order (new since
+        // last save) at the end in their original SmugMug order.
+        sg.items.forEach((it, idx) => {
+            const id = photoIdFor(it, catId, 0, idx);
+            if (!used.has(id)) ordered.push(it);
+        });
+        sg.items = ordered;
+    }
+
+    async function loadPhotoOrdersFromKV() {
+        try {
+            const r = await fetch('/api/smugmug?action=list-photo-orders&_=' + Date.now());
+            if (!r.ok) return;
+            const j = await r.json();
+            photoOrders = (j && j.orders) ? j.orders : {};
+            // Merge in any recent local writes that KV may not have
+            // propagated yet.
+            try {
+                const raw = localStorage.getItem('admin:photoOrder');
+                if (raw) {
+                    const map = JSON.parse(raw) || {};
+                    Object.keys(map).forEach(key => {
+                        const entry = map[key];
+                        if (entry && Array.isArray(entry.order) &&
+                            (Date.now() - (entry.ts || 0)) < ADMIN_WRITE_TTL_MS) {
+                            photoOrders[key] = entry.order;
+                        }
+                    });
+                }
+            } catch (e) {}
+            // Reapply to any currently-loaded galleries.
+            Object.keys(collectionData || {}).forEach(cid => {
+                (collectionData[cid] || []).forEach(sg => applyPhotoOrder(cid, sg));
+            });
+            // Re-render the currently-visible gallery if any.
+            if (typeof renderMediaGrid === 'function' &&
+                currentPortfolio && currentSubGalleryIndex != null) {
+                renderMediaGrid();
+            }
+        } catch (e) {
+            console.warn('loadPhotoOrdersFromKV failed:', e);
+        }
+    }
+
+    async function savePhotoOrder(catId, sg) {
+        if (!sg || !Array.isArray(sg.items)) return;
+        const key = catId + '__' + sg.name;
+        const order = sg.items.map((it, i) => photoIdFor(it, catId, 0, i));
+        // Local mirror first so an immediate reload sees the saved order
+        // even if KV hasn't propagated yet.
+        try {
+            const raw = localStorage.getItem('admin:photoOrder');
+            const map = raw ? (JSON.parse(raw) || {}) : {};
+            map[key] = { order, ts: Date.now() };
+            localStorage.setItem('admin:photoOrder', JSON.stringify(map));
+        } catch (e) {}
+        // Keep in-memory state in sync.
+        photoOrders[key] = order;
+        try {
+            const r = await fetch('/api/smugmug?action=save-photo-order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key, order }),
+            });
+            if (!r.ok) {
+                alert('Failed to save photo order (HTTP ' + r.status + '). Your reorder may not persist. Try again in a moment.');
+            }
+        } catch (e) {
+            alert('Failed to save photo order: ' + (e && e.message || e));
+        }
+    }
+
     function getCoverPosCss(catId, sg) {
         const key = catId + '__' + sg.name;
         const p = subgalleryCoverPositions[key];
@@ -3958,6 +4063,12 @@
                 sg2.items.splice(i, 0, moved);
                 dragSrcIndex = null;
                 renderMediaGrid();
+                // Persist the new order to KV so it survives page reload.
+                savePhotoOrder(currentPortfolio, sg2);
+                // Also update the localStorage collection cache so the
+                // reorder shows immediately on this device even before KV
+                // propagates.
+                saveCollection();
             });
             grid.appendChild(el);
         });
@@ -5993,6 +6104,7 @@
                 ['stats',           'list-stats'],
                 ['aboutOrder',      'list-about-order'],
                 ['sgcoverPositions','list-sgcover-positions'],
+                ['photoOrders',     'list-photo-orders'],
             ];
             const results = await Promise.all(endpoints.map(async ([key, action]) => {
                 try {
@@ -6100,7 +6212,7 @@
                 // still right there.
                 const portfolio = portfolios.find(p => p.id === catId);
                 const alwaysRefresh = !!(portfolio && portfolio.singleGallery);
-                if (sg.items.length === 0 || alwaysRefresh) fetchTasks.push({ sg, albumUrl, playerName });
+                if (sg.items.length === 0 || alwaysRefresh) fetchTasks.push({ sg, albumUrl, playerName, catId });
             }
 
             // Apply saved gallery order NOW that every gallery is in
@@ -6112,11 +6224,19 @@
             // loadGalleryOrdersFromKV ran while collectionData was empty.
             await loadGalleryOrdersFromKV();
 
+            // Load per-gallery photo orders NOW so applyPhotoOrder can
+            // reorder each sub-gallery's items array as soon as its
+            // SmugMug fetch resolves. Without this, admin reorders of
+            // individual photos wouldn't persist across page loads —
+            // the fresh SmugMug fetch would always paint in SmugMug's
+            // default order.
+            await loadPhotoOrdersFromKV();
+
             // Second pass: kick off SmugMug fetches in parallel batches.
             // Cap concurrency at 8 — fast enough to feel snappy, low enough
             // to not exceed SmugMug rate limits or saturate mobile networks.
             const CONCURRENCY = 8;
-            const oneFetch = async ({ sg, albumUrl, playerName }) => {
+            const oneFetch = async ({ sg, albumUrl, playerName, catId }) => {
                 try {
                     const url = new URL(albumUrl);
                     const imgResp = await fetch(`/api/smugmug?path=${encodeURIComponent(url.pathname)}`);
@@ -6141,6 +6261,10 @@
                     if (!sg.cover && sg.items[0]?.largeUrl) {
                         sg.cover = sg.items[0].largeUrl;
                     }
+                    // Reorder items to match the admin's saved sequence
+                    // (drag-to-reorder in the media grid). No-op if there
+                    // isn't one saved for this gallery.
+                    if (catId) applyPhotoOrder(catId, sg);
                 } catch (e) {
                     console.warn(`Failed to load ${playerName}:`, e);
                 }
@@ -6387,6 +6511,22 @@
                 }
             }
             if (dirty) localStorage.setItem('admin:order', JSON.stringify(orderMap));
+        } catch (e) {}
+        // 'admin:photoOrder' has the same {order, ts} shape as admin:order
+        // but is keyed by "<catId>__<player>" instead of catId. Prune it
+        // the same way.
+        try {
+            const orderMap = JSON.parse(localStorage.getItem('admin:photoOrder') || '{}');
+            const now = Date.now();
+            let dirty = false;
+            for (const k of Object.keys(orderMap)) {
+                const m = orderMap[k];
+                if (!m || !m.ts || now - m.ts >= ADMIN_WRITE_TTL_MS) {
+                    delete orderMap[k];
+                    dirty = true;
+                }
+            }
+            if (dirty) localStorage.setItem('admin:photoOrder', JSON.stringify(orderMap));
         } catch (e) {}
     }
     pruneAdminMarks();
