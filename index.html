@@ -6299,6 +6299,12 @@
             saveCollection();
             kvFullyLoaded = true;
             saveStatsToKV();
+            // Re-run hash navigation now that the collection is fully
+            // populated. Fresh visits (shared deep links, no localStorage)
+            // hit an empty collectionData on the first-pass navigateFromHash
+            // call — this second pass is what actually gets them to the
+            // linked gallery.
+            try { navigateFromHash(); } catch (e) {}
         } catch (e) {
             console.warn('KV load failed:', e);
         }
@@ -6629,39 +6635,60 @@
         }
     });
 
-    // On initial page load, check if there's a hash and navigate to it
-    (function handleInitialHash() {
+    // On initial page load — and again after loadFromKV populates the
+    // collection — parse the URL hash and jump to the deep-linked view.
+    // Runs twice because on a fresh visit (shared link, no localStorage),
+    // collectionData is empty during the first call so we can't verify
+    // the target gallery exists. The second run happens once loadFromKV
+    // finishes and the requested sub-gallery is actually available.
+    //
+    // Tracks whether we've already succeeded so the second run is a
+    // no-op when the first run already got us to the right page.
+    let __hashNavigationDone = false;
+    function navigateFromHash() {
+        if (__hashNavigationDone) return;
         const hash = window.location.hash.slice(1);
-        if (!hash)
-            return;
+        if (!hash) return;
         const parts = hash.split('/');
         if (parts[0] === 'browse' && parts[1]) {
-            if (collectionData[parts[1]]) {
-                openPortfolio(parts[1], true);
-                history.replaceState({
-                    view: 'portfolio',
-                    id: parts[1]
-                }, '', '#browse/' + parts[1]);
-                if (parts[2] !== undefined) {
-                    const idx = parseInt(parts[2], 10);
-                    if (!isNaN(idx) && collectionData[parts[1]][idx]) {
-                        openSubGallery(idx, true);
-                        history.replaceState({
-                            view: 'subgallery',
-                            portfolio: parts[1],
-                            index: idx
-                        }, '', '#browse/' + parts[1] + '/' + idx);
-                    }
+            // Category must exist in collectionData before we can open it.
+            // On the first (pre-load) pass this may not be true yet — bail
+            // and let the post-load pass handle it.
+            if (!collectionData[parts[1]]) return;
+            openPortfolio(parts[1], true);
+            history.replaceState({
+                view: 'portfolio',
+                id: parts[1]
+            }, '', '#browse/' + parts[1]);
+            if (parts[2] !== undefined) {
+                const idx = parseInt(parts[2], 10);
+                // Sub-gallery must exist too — again, may not yet on the
+                // first pass. Only mark navigation done if we made it in.
+                if (!isNaN(idx) && collectionData[parts[1]][idx]) {
+                    openSubGallery(idx, true);
+                    history.replaceState({
+                        view: 'subgallery',
+                        portfolio: parts[1],
+                        index: idx
+                    }, '', '#browse/' + parts[1] + '/' + idx);
+                    __hashNavigationDone = true;
+                    return;
                 }
+                // Sub-gallery not loaded yet — leave __hashNavigationDone
+                // false so the post-load run can complete the deep link.
+                return;
             }
+            __hashNavigationDone = true;
         } else if (['home', 'browse', 'about', 'contact'].includes(hash)) {
             showPage(hash, null, true);
             history.replaceState({
                 view: 'page',
                 name: hash
             }, '', '#' + hash);
+            __hashNavigationDone = true;
         }
-    })();
+    }
+    navigateFromHash();
 
 
     document.getElementById('nav-logo-img').addEventListener('click', () => {
