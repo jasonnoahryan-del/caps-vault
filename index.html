@@ -3482,11 +3482,39 @@
     // SmugMug so a drag-reorder actually sticks across page loads.
     let photoOrders = {};
 
-    // Stable identifier for a photo — must match the id used elsewhere
-    // (lightbox, search, etc.). Falls back to a positional key only when
-    // the photo has no SmugMug URLs at all.
+    // Stable identifier for a photo. SmugMug regenerates a signed segment
+    // of image URLs on every fetch, so the full URL is NOT stable across
+    // page loads — using it as an ID means saved photo orders can never
+    // be re-matched to the freshly-fetched items. The SmugMug ImageKey
+    // (e.g. "i-3cR9d8m") IS stable and appears in every URL for that
+    // photo. Extract it and use it as the identifier.
+    function extractSmugmugKey(url) {
+        if (typeof url !== 'string' || !url) return null;
+        const m = url.match(/\/(i-[A-Za-z0-9]+)\//);
+        return m ? m[1] : null;
+    }
     function photoIdFor(item, catId, sgIndex, i) {
-        return item.webUri || item.largeUrl || item.src || ('idx:' + catId + ':' + sgIndex + ':' + i);
+        if (item && typeof item === 'object') {
+            for (const url of [item.webUri, item.largeUrl, item.src, item.thumbUrl, item.posterUrl]) {
+                const key = extractSmugmugKey(url);
+                if (key) return 'smugmug:' + key;
+            }
+            if (item.name) return 'name:' + item.name;
+        }
+        return 'idx:' + catId + ':' + sgIndex + ':' + i;
+    }
+    // Normalize a saved id (which may be from an older schema using full
+    // URLs) into the current stable identifier. Same input → same output
+    // for the current schema; old URL-shaped entries get their ImageKey
+    // extracted so they still match against freshly-fetched items.
+    function normalizePhotoId(savedId) {
+        if (typeof savedId !== 'string') return savedId;
+        if (savedId.startsWith('smugmug:') || savedId.startsWith('name:') || savedId.startsWith('idx:')) {
+            return savedId;
+        }
+        const key = extractSmugmugKey(savedId);
+        if (key) return 'smugmug:' + key;
+        return savedId;
     }
 
     // Reorder a sub-gallery's items array in place to match the saved
@@ -3504,9 +3532,10 @@
         const ordered = [];
         const used = new Set();
         savedOrder.forEach(id => {
-            if (byId.has(id)) {
-                ordered.push(byId.get(id));
-                used.add(id);
+            const normId = normalizePhotoId(id);
+            if (byId.has(normId)) {
+                ordered.push(byId.get(normId));
+                used.add(normId);
             }
         });
         // Append any items that weren't in the saved order (new since
