@@ -2577,8 +2577,23 @@
          tab clears sessionStorage, so a fresh visit shows it again. -->
     <script>
         try {
-            if (sessionStorage.getItem('vaultEntered') === '1') {
+            // Skip the splash overlay if:
+            //  1. The user already entered the site this session, OR
+            //  2. They arrived via a deep link (a hash pointing to a
+            //     specific gallery, category, or page) — sending them
+            //     through the splash + Cup-call intro when they clicked
+            //     a shared link to see one specific thing is friction
+            //     that gets people to bounce.
+            const hash = (window.location.hash || '').slice(1);
+            const isDeepLink = hash && hash !== 'home';
+            if (sessionStorage.getItem('vaultEntered') === '1' || isDeepLink) {
                 document.documentElement.classList.add('splash-skip');
+                // Mark the session as entered so navigating away from the
+                // deep-linked view (back to home, etc.) doesn't re-trigger
+                // the splash.
+                if (isDeepLink) {
+                    try { sessionStorage.setItem('vaultEntered', '1'); } catch (e) {}
+                }
             }
         } catch (e) {}
     </script>
