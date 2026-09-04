@@ -6591,11 +6591,14 @@
     // handler needed — we have an explicit user gesture from the splash.
 
     // ── BROWSER HISTORY / BACK BUTTON SUPPORT ──
-    // Set initial state so the first back press brings us to home (or wherever they started)
+    // Set initial state so the first back press brings us to home (or
+    // wherever they started). CRITICAL: preserve the URL hash — if we
+    // pass just pathname, we strip the deep-link hash before
+    // navigateFromHash can read it and shared links land on home.
     history.replaceState({
         view: 'page',
         name: 'home'
-    }, '', window.location.pathname);
+    }, '', window.location.pathname + window.location.hash);
 
     // Handle browser back/forward navigation
     window.addEventListener('popstate', (event) => {
