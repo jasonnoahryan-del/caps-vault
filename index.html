@@ -6647,40 +6647,46 @@
     //
     // Tracks whether we've already succeeded so the second run is a
     // no-op when the first run already got us to the right page.
+    // Capture the original hash ONCE at load. As soon as openPortfolio /
+    // openSubGallery start firing they replace the URL, so relying on
+    // window.location.hash on the second pass would give us a stripped
+    // version. This captured value is the source of truth for the deep
+    // link across both navigation passes.
+    const __originalHash = window.location.hash.slice(1);
     let __hashNavigationDone = false;
     function navigateFromHash() {
         if (__hashNavigationDone) return;
-        const hash = window.location.hash.slice(1);
-        if (!hash) return;
+        const hash = __originalHash;
+        if (!hash) { __hashNavigationDone = true; return; }
         const parts = hash.split('/');
         if (parts[0] === 'browse' && parts[1]) {
             // Category must exist in collectionData before we can open it.
             // On the first (pre-load) pass this may not be true yet — bail
             // and let the post-load pass handle it.
             if (!collectionData[parts[1]]) return;
+            // If a sub-gallery is requested, only proceed once it's fully
+            // available in collectionData. Otherwise we'd open the parent
+            // category on the first pass and never reach the sub-gallery.
+            if (parts[2] !== undefined) {
+                const idx = parseInt(parts[2], 10);
+                if (isNaN(idx) || !collectionData[parts[1]][idx]) {
+                    return; // wait for the post-load pass
+                }
+                openPortfolio(parts[1], true);
+                openSubGallery(idx, true);
+                history.replaceState({
+                    view: 'subgallery',
+                    portfolio: parts[1],
+                    index: idx
+                }, '', '#browse/' + parts[1] + '/' + idx);
+                __hashNavigationDone = true;
+                return;
+            }
             openPortfolio(parts[1], true);
             history.replaceState({
                 view: 'portfolio',
                 id: parts[1]
             }, '', '#browse/' + parts[1]);
-            if (parts[2] !== undefined) {
-                const idx = parseInt(parts[2], 10);
-                // Sub-gallery must exist too — again, may not yet on the
-                // first pass. Only mark navigation done if we made it in.
-                if (!isNaN(idx) && collectionData[parts[1]][idx]) {
-                    openSubGallery(idx, true);
-                    history.replaceState({
-                        view: 'subgallery',
-                        portfolio: parts[1],
-                        index: idx
-                    }, '', '#browse/' + parts[1] + '/' + idx);
-                    __hashNavigationDone = true;
-                    return;
-                }
-                // Sub-gallery not loaded yet — leave __hashNavigationDone
-                // false so the post-load run can complete the deep link.
-                return;
-            }
             __hashNavigationDone = true;
         } else if (['home', 'browse', 'about', 'contact'].includes(hash)) {
             showPage(hash, null, true);
