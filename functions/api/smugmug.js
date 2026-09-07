@@ -471,9 +471,23 @@ export async function onRequest(context) {
 
     if (!imgResult.data?.Response?.AlbumImage) return new Response(JSON.stringify({ images: [], count: 0 }), { headers: corsHeaders });
 
+    // Extract the stable SmugMug ImageKey (e.g. "i-3cR9d8m") from a
+    // ThumbnailUrl so we can construct a direct per-image page URL when
+    // the API omits WebUri (which SmugMug is doing for videos now).
+    const extractImageKey = (url) => {
+      if (typeof url !== 'string' || !url) return null;
+      const m = url.match(/\/(i-[A-Za-z0-9]+)\//);
+      return m ? m[1] : null;
+    };
     const images = imgResult.data.Response.AlbumImage.map(img => {
       const isVideo = img.IsVideo || false;
       const thumbUrl = img.ThumbnailUrl || '';
+      // Build a fallback WebUri for images/videos when SmugMug omits it.
+      // The individual media page URL is albumWebUri + '/' + ImageKey.
+      const imageKey = extractImageKey(thumbUrl);
+      const constructedWebUri = (albumWebUri && imageKey)
+        ? albumWebUri.replace(/\/$/, '') + '/' + imageKey
+        : '';
       return {
         name: img.Title || img.FileName || 'Photo',
         caption: img.Caption || '',
@@ -482,7 +496,9 @@ export async function onRequest(context) {
         largeUrl: isVideo ? '' : getSizedUrl(thumbUrl, 'X3Large'),
         videoUrl: '',
         posterUrl: isVideo ? (getSizedUrl(thumbUrl, 'M') || thumbUrl) : '',
-        webUri: img.WebUri || albumWebUri || ''
+        // Prefer the individual image page URL; fall back to album URL
+        // only if we couldn't derive an image key at all.
+        webUri: img.WebUri || constructedWebUri || albumWebUri || ''
       };
     });
 
